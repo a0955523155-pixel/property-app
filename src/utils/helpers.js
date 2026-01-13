@@ -23,7 +23,7 @@ export const createEmptyLandItem = () => ({
   subtotal: "" 
 });
 
-// CSV 匯出邏輯 (✅ 已修正：面積改為小數點後 3 位)
+// CSV 匯出邏輯 (✅ 已修正：強制所有面積相關欄位為 3 位小數)
 export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions) => {
     let csvContent = "\uFEFF"; 
     csvContent += `=== 專案報表: ${projectName} ===\n`;
@@ -43,13 +43,15 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     lands.forEach(l => {
       const sellersStr = l.sellers.map(s => s.name).join(';');
       l.items.forEach(item => {
-        const hM2 = (Number(item.areaM2) * (Number(item.shareNum) / Number(item.shareDenom))).toFixed(3); // ✅ 改為 3 位
-        csvContent += `"${sellersStr}",${l.section},${item.lotNumber},${hM2},${toPing(hM2).toFixed(3)},${item.pricePerPing},${item.subtotal}\n`; // ✅ 改為 3 位
+        // ✅ 修正：個別地號面積改為 3 位
+        const hM2 = (Number(item.areaM2) * (Number(item.shareNum) / Number(item.shareDenom))).toFixed(3);
+        const hPing = toPing(hM2).toFixed(3);
+        csvContent += `"${sellersStr}",${l.section},${item.lotNumber},${hM2},${hPing},${item.pricePerPing},${item.subtotal}\n`;
       });
     });
     csvContent += "\n";
 
-    // 3. 建物資料
+    // 3. 建物資料 (包含建照號碼)
     csvContent += "=== 建物標的清單 ===\n";
     csvContent += "出售人/屋主,建照號碼,門牌地址,使照號碼,建號,面積(m2),單價(元/坪),成交總額($)\n";
     buildings.forEach(b => {

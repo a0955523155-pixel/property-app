@@ -59,6 +59,22 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
   const [previewImage, setPreviewImage] = useState(null);
 
   // --- 計算邏輯 ---
+  
+  // ✅ 修正 1: 即時計算的總持有面積改為 3 位小數 (原本是 4)
+  const currentHoldingAreaM2 = useMemo(() => {
+    let total = 0;
+    tempLand.items.forEach(item => {
+      const area = Number(item.areaM2) || 0;
+      const num = Number(item.shareNum) || 0;
+      const denom = Number(item.shareDenom) || 1;
+      total += area * (num / denom);
+    });
+    return total.toFixed(3);
+  }, [tempLand.items]);
+
+  // ✅ 修正 2: 即時計算的總持有坪數改為 3 位小數
+  const currentHoldingAreaPing = useMemo(() => toPing(currentHoldingAreaM2).toFixed(3), [currentHoldingAreaM2]);
+
   const stats = useMemo(() => {
     let totalIncome = 0;
     let totalExpense = 0;
@@ -128,7 +144,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
       totalPriceSum += (Number(item.subtotal) || 0);
     });
     
-    // ✅ 修正：儲存時改為小數點後 3 位
+    // ✅ 修正 3: 儲存資料時，強制小數點後 3 位
     const landData = { 
         ...tempLand, 
         holdingAreaM2: totalM2.toFixed(3), 
@@ -299,8 +315,8 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                           <div className="flex items-center gap-3 mb-4"><span className="bg-blue-600 text-white text-xs px-3 py-1 rounded-full font-black tracking-widest">土地標的</span><h4 className="font-black text-gray-900 text-2xl">{l.sellers.length > 0 ? l.sellers.map(s => s.name).join(' / ') : `地段: ${l.section || "未命名"}`}</h4></div>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 text-base text-gray-500 bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-inner">
                             <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">地號總數</span><p className="font-black text-gray-700">{l.items.length} 筆</p></div>
-                            <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">持有 (㎡)</span><p className="font-mono font-bold text-gray-700">{l.holdingAreaM2}</p></div>
-                            <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">持有 (坪)</span><p className="font-mono font-bold text-gray-700">{l.holdingAreaPing}</p></div>
+                            <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">持有 (㎡)</span><p className="font-mono font-bold text-gray-700">{Number(l.holdingAreaM2).toFixed(3)}</p></div>
+                            <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">持有 (坪)</span><p className="font-mono font-bold text-gray-700">{Number(l.holdingAreaPing).toFixed(3)}</p></div>
                             <div><span className="text-xs text-blue-500 block font-black uppercase mb-1">成交總額</span><p className="font-mono font-black text-blue-600 text-xl">${Number(l.totalPrice).toLocaleString()}</p></div>
                           </div>
                         </div>
@@ -480,7 +496,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
         )}
       </div>
 
-      {/* ✅ 完整報表列印區塊 (預設隱藏，列印時顯示) */}
+      {/* 完整報表列印區塊 (預設隱藏，列印時顯示) */}
       <div className="hidden print:block print:p-8">
         <h1 className="text-2xl font-bold mb-2">專案管理報表: {projectName}</h1>
         <p className="text-sm text-gray-500 mb-8">列印日期: {new Date().toLocaleDateString()}</p>
@@ -530,8 +546,9 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                   <td className="border p-2 text-xs">
                       {l.items.map(i => i.lotNumber).join(', ').substring(0, 50)}{l.items.length > 5 ? '...' : ''}
                   </td>
-                  <td className="border p-2 text-right">{l.holdingAreaM2}</td>
-                  <td className="border p-2 text-right">{l.holdingAreaPing}</td>
+                  {/* ✅ 確保列印時也是 3 位小數 */}
+                  <td className="border p-2 text-right">{Number(l.holdingAreaM2).toFixed(3)}</td>
+                  <td className="border p-2 text-right">{Number(l.holdingAreaPing).toFixed(3)}</td>
                   <td className="border p-2 text-right">${Number(l.totalPrice).toLocaleString()}</td>
                 </tr>
               ))}
