@@ -1,21 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Wifi, WifiOff, Wrench, AlertCircle, LayoutGrid, FolderPlus, 
-  Home, Trash2, Calendar, CheckCircle2, XCircle 
+  Home, Trash2, Calendar, CheckCircle2, XCircle, MessageSquarePlus, Send
 } from 'lucide-react';
 
 // --- 引入設定檔 ---
 import { db, auth } from './config/firebase';
 
-// --- ✅ 修正區塊：正確分開引入 Firestore 與 Auth ---
-
-// 1. 從 firestore 引入資料庫功能
+// --- 引入 Firestore 與 Auth ---
 import { 
   collection, doc, updateDoc, addDoc, deleteDoc, 
   onSnapshot, query, orderBy, serverTimestamp 
 } from "firebase/firestore";
-
-// 2. 從 auth 引入驗證功能 (這裡才是正確的位置)
 import { 
   signInAnonymously, onAuthStateChanged 
 } from "firebase/auth";
@@ -25,6 +21,8 @@ import ProjectEditor from './components/ProjectEditor';
 
 const App = () => {
   const [projects, setProjects] = useState([]);
+  const [feedbacks, setFeedbacks] = useState([]); // ✅ 新增：問題回饋狀態
+  const [newFeedback, setNewFeedback] = useState(""); // ✅ 新增：新問題輸入框
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [user, setUser] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
@@ -46,7 +44,7 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 1. 監聽 Firestore
+  // 1. 監聽 Firestore (專案列表)
   useEffect(() => {
     if (!user) return; 
     const q = query(collection(db, "projects"), orderBy("updatedAt", "desc"));
@@ -62,7 +60,19 @@ const App = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // 2. CRUD 操作
+  // ✅ 2. 監聽 Firestore (問題回饋列表)
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, "feedbacks"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const feedbackData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setFeedbacks(feedbackData);
+    });
+    return () => unsubscribe();
+  }, [user]);
+
+  // --- CRUD 操作 ---
+
   const handleSaveProject = async (updatedProject) => {
     if (!user) return; 
     try {
@@ -91,6 +101,34 @@ const App = () => {
       await deleteDoc(doc(db, "projects", projectId));
       if (activeProjectId === projectId) setActiveProjectId(null);
     } catch (error) { console.error(error); alert("刪除失敗"); }
+  };
+
+  // ✅ 新增問題回饋
+  const submitFeedback = async (e) => {
+    e.preventDefault();
+    if (!newFeedback.trim()) return;
+    if (!user) return alert("請稍候資料庫連線...");
+    try {
+      await addDoc(collection(db, "feedbacks"), {
+        content: newFeedback,
+        createdAt: new Date().toISOString(),
+        status: 'open'
+      });
+      setNewFeedback("");
+    } catch (error) {
+      console.error("Feedback Error:", error);
+      alert("提交失敗");
+    }
+  };
+
+  // ✅ 刪除問題回饋 (修復完成)
+  const deleteFeedback = async (id) => {
+    if (!confirm("確定已修復此問題並移除？")) return;
+    try {
+      await deleteDoc(doc(db, "feedbacks"), id);
+    } catch (error) {
+      console.error("Delete Feedback Error:", error);
+    }
   };
 
   const runDiagnostics = async () => {
@@ -172,7 +210,7 @@ const App = () => {
           </div>
 
           {/* 專案卡片網格 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mb-16">
             {projects.length > 0 ? projects.map(project => {
               const summary = getProjectSummary(project);
               return (
@@ -200,6 +238,57 @@ const App = () => {
               </div>
             )}
           </div>
+
+          {/* ✅ 新增：問題回饋 (Issue Tracker) 區塊 */}
+          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-[2rem] p-8 max-w-4xl mx-auto shadow-xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-200 rounded-bl-full opacity-50 -mr-10 -mt-10"></div>
+            
+            <h3 className="text-xl font-black text-yellow-800 mb-6 flex items-center gap-2">
+              <MessageSquarePlus className="w-6 h-6" /> 系統問題與需求回饋 (Developer Notes)
+            </h3>
+            
+            {/* 輸入區 */}
+            <form onSubmit={submitFeedback} className="flex gap-4 mb-8">
+              <input 
+                type="text" 
+                placeholder="在此記錄系統問題或新功能需求 (Bug / Feature Request)..." 
+                className="flex-1 p-4 rounded-xl border-2 border-yellow-200 bg-white focus:outline-none focus:border-yellow-500 shadow-sm"
+                value={newFeedback}
+                onChange={(e) => setNewFeedback(e.target.value)}
+              />
+              <button type="submit" className="bg-yellow-600 text-white px-6 rounded-xl hover:bg-yellow-700 transition font-bold flex items-center gap-2 shadow-lg">
+                <Send className="w-4 h-4" /> 記錄
+              </button>
+            </form>
+
+            {/* 列表區 */}
+            <div className="space-y-3">
+              {feedbacks.length > 0 ? feedbacks.map(item => (
+                <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-100 flex justify-between items-center group hover:shadow-md transition">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1 w-2 h-2 rounded-full bg-yellow-400 shrink-0"></div>
+                    <div>
+                      <p className="text-gray-800 font-medium">{item.content}</p>
+                      <p className="text-xs text-gray-400 mt-1">{new Date(item.createdAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => deleteFeedback(item.id)} 
+                    className="text-gray-300 hover:text-green-600 hover:bg-green-50 p-2 rounded-full transition flex items-center gap-2"
+                    title="標記為已修復/移除"
+                  >
+                    <span className="text-xs font-bold hidden group-hover:inline">已修復</span>
+                    <CheckCircle2 className="w-5 h-5" />
+                  </button>
+                </div>
+              )) : (
+                <div className="text-center text-gray-400 py-4 italic">
+                  目前沒有待處理的問題，系統運作良好！ 👍
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
       )}
     </div>
