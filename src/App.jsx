@@ -19,16 +19,91 @@ import {
 // 引入子元件
 import ProjectEditor from './components/ProjectEditor';
 
+// --- CSS Styles (包含列印設定) ---
+const APP_STYLES = `
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fadeIn {
+    animation: fadeIn 0.5s ease-out forwards;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  /* --- 列印專用樣式 (PDF Export Settings) --- */
+  @media print {
+    @page { 
+      size: A4 portrait; /* ✅ 改為直式 */
+      margin: 10mm; 
+    }
+    body, #root, .app-wrapper {
+      background-color: white !important;
+      height: auto !important;
+      overflow: visible !important;
+      font-size: 10pt !important;
+    }
+    /* 強制隱藏互動元素 */
+    .print\\:hidden { display: none !important; }
+    /* 強制顯示列印報表 */
+    .print\\:block { display: block !important; }
+    .print\\:p-8 { padding: 0 !important; }
+    
+    /* 表格樣式優化 (直向時特別重要，防止表格過寬) */
+    table { 
+      width: 100% !important; 
+      border-collapse: collapse !important; 
+      margin-bottom: 20px !important; 
+      table-layout: fixed; /* ✅ 強制固定寬度，避免撐破頁面 */
+    }
+    th, td { 
+      border: 1px solid #000 !important; 
+      padding: 4px 6px !important; 
+      text-align: left; 
+      font-size: 9pt !important; /* ✅ 字體微調，讓直向能塞入更多內容 */
+      word-wrap: break-word; /* ✅ 長文字自動換行 */
+      overflow-wrap: break-word;
+    }
+    /* 針對不同欄位設定寬度比例，避免建照號碼或地址擠壓 */
+    th:nth-child(1) { width: 15%; } /* 姓名/出售人 */
+    th:nth-child(2) { width: 15%; } /* 電話/建照 */
+    
+    thead { display: table-header-group; background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    
+    /* 隱藏捲軸與陰影 */
+    .no-scrollbar { overflow: visible !important; }
+    * { box-shadow: none !important; text-shadow: none !important; }
+  }
+`;
+
 const App = () => {
   const [projects, setProjects] = useState([]);
-  const [feedbacks, setFeedbacks] = useState([]); // ✅ 新增：問題回饋狀態
-  const [newFeedback, setNewFeedback] = useState(""); // ✅ 新增：新問題輸入框
+  const [feedbacks, setFeedbacks] = useState([]);
+  const [newFeedback, setNewFeedback] = useState("");
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [user, setUser] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
   const [testResult, setTestResult] = useState(null);
 
-  // 0. 認證流程
+  // 0. 注入樣式
+  useEffect(() => {
+    const styleTag = document.createElement("style");
+    styleTag.textContent = APP_STYLES;
+    document.head.appendChild(styleTag);
+    return () => {
+      if(document.head.contains(styleTag)){
+        document.head.removeChild(styleTag);
+      }
+    }
+  }, []);
+
+  // 1. 認證流程
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -44,7 +119,7 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 1. 監聽 Firestore (專案列表)
+  // 2. 監聽 Firestore (專案)
   useEffect(() => {
     if (!user) return; 
     const q = query(collection(db, "projects"), orderBy("updatedAt", "desc"));
@@ -60,7 +135,7 @@ const App = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // ✅ 2. 監聽 Firestore (問題回饋列表)
+  // 3. 監聽 Firestore (回饋)
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "feedbacks"), orderBy("createdAt", "desc"));
@@ -72,7 +147,6 @@ const App = () => {
   }, [user]);
 
   // --- CRUD 操作 ---
-
   const handleSaveProject = async (updatedProject) => {
     if (!user) return; 
     try {
@@ -103,7 +177,6 @@ const App = () => {
     } catch (error) { console.error(error); alert("刪除失敗"); }
   };
 
-  // ✅ 新增問題回饋
   const submitFeedback = async (e) => {
     e.preventDefault();
     if (!newFeedback.trim()) return;
@@ -121,7 +194,6 @@ const App = () => {
     }
   };
 
-  // ✅ 刪除問題回饋 (修復完成)
   const deleteFeedback = async (id) => {
     if (!confirm("確定已修復此問題並移除？")) return;
     try {
@@ -239,7 +311,7 @@ const App = () => {
             )}
           </div>
 
-          {/* ✅ 新增：問題回饋 (Issue Tracker) 區塊 */}
+          {/* 問題回饋區塊 */}
           <div className="bg-yellow-50 border-2 border-yellow-200 rounded-[2rem] p-8 max-w-4xl mx-auto shadow-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-200 rounded-bl-full opacity-50 -mr-10 -mt-10"></div>
             
@@ -247,7 +319,6 @@ const App = () => {
               <MessageSquarePlus className="w-6 h-6" /> 系統問題與需求回饋 (Developer Notes)
             </h3>
             
-            {/* 輸入區 */}
             <form onSubmit={submitFeedback} className="flex gap-4 mb-8">
               <input 
                 type="text" 
@@ -261,7 +332,6 @@ const App = () => {
               </button>
             </form>
 
-            {/* 列表區 */}
             <div className="space-y-3">
               {feedbacks.length > 0 ? feedbacks.map(item => (
                 <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-100 flex justify-between items-center group hover:shadow-md transition">
