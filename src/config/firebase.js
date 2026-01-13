@@ -1,11 +1,8 @@
-// Import the functions you need from the SDKs you need
+// src/config/firebase.js
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getAuth } from "firebase/auth";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyAxELFGabX9RUTrns_OaHsM6RQI1W1uEP4",
   authDomain: "dacheng-special-account.firebaseapp.com",
@@ -16,8 +13,6 @@ const firebaseConfig = {
   measurementId: "G-9KN37FLNWF"
 };
 
-// 初始化 Firebase
 const app = initializeApp(firebaseConfig);
-
-// ⚠️ 關鍵修正：加上 'export' 讓 App.jsx 可以讀取到 db
 export const db = getFirestore(app);
+export const auth = getAuth(app);

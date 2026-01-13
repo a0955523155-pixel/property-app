@@ -1,3 +1,48 @@
+/* src/index.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* --- 列印專用樣式 (PDF Export Fix) --- */
+@media print {
+  @page { 
+    size: A4 landscape; 
+    margin: 10mm; 
+  }
+  body, #root, .app-wrapper {
+    background-color: white !important;
+    height: auto !important;
+    overflow: visible !important;
+    font-size: 10pt !important;
+  }
+  /* 強制隱藏互動元素 */
+  .print\:hidden { display: none !important; }
+  /* 強制顯示列印報表 */
+  .print\:block { display: block !important; }
+  .print\:p-8 { padding: 2rem !important; }
+  
+  /* 表格樣式優化 */
+  table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 20px !important; }
+  th, td { border: 1px solid #000 !important; padding: 6px 8px !important; text-align: left; font-size: 10pt !important; }
+  thead { display: table-header-group; background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  
+  /* 隱藏捲軸與陰影 */
+  .no-scrollbar { overflow: visible !important; }
+  * { box-shadow: none !important; text-shadow: none !important; }
+}
