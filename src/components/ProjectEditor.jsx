@@ -38,7 +38,6 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
   const [buildings, setBuildings] = useState(initialData.buildings || []);
   const [showBuildingForm, setShowBuildingForm] = useState(false);
   const [editingBuildingId, setEditingBuildingId] = useState(null);
-  // ✅ 新增 permitNumber (建照號碼)
   const [tempBuilding, setTempBuilding] = useState({
     permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: []
   });
@@ -124,9 +123,19 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     let totalM2 = 0; let totalPingSum = 0; let totalPriceSum = 0;
     tempLand.items.forEach(item => {
       const hM2 = Number(item.areaM2) * (Number(item.shareNum) / Number(item.shareDenom));
-      totalM2 += hM2; totalPingSum += toPing(hM2); totalPriceSum += (Number(item.subtotal) || 0);
+      totalM2 += hM2; 
+      totalPingSum += toPing(hM2); 
+      totalPriceSum += (Number(item.subtotal) || 0);
     });
-    const landData = { ...tempLand, holdingAreaM2: totalM2.toFixed(4), holdingAreaPing: totalPingSum.toFixed(4), totalPrice: totalPriceSum };
+    
+    // ✅ 修正：儲存時改為小數點後 3 位
+    const landData = { 
+        ...tempLand, 
+        holdingAreaM2: totalM2.toFixed(3), 
+        holdingAreaPing: totalPingSum.toFixed(3), 
+        totalPrice: totalPriceSum 
+    };
+
     if (editingLandId) setLands(lands.map(l => l.id === editingLandId ? { ...landData, id: l.id } : l));
     else setLands([...lands, { ...landData, id: Date.now() }]);
     setTempLand({ section: "", items: [createEmptyLandItem()], sellers: [] });
@@ -142,7 +151,6 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     if(!tempBuilding.address) return alert("請輸入門牌地址");
     if (editingBuildingId) setBuildings(buildings.map(b => b.id === editingBuildingId ? { ...tempBuilding, id: b.id } : b));
     else setBuildings([...buildings, { ...tempBuilding, id: Date.now() }]);
-    // Reset form including permitNumber
     setTempBuilding({ permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [] });
     setShowBuildingForm(false);
     setEditingBuildingId(null);
@@ -318,7 +326,6 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                      <button onClick={() => setShowBuildingForm(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full transition"><X className="w-7 h-7" /></button>
                    </div>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                     {/* ✅ 新增：建照號碼 (排在門牌地址前) */}
                      <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">建照號碼</label><input placeholder="建照號碼" className="w-full p-3 border rounded-lg text-base outline-none focus:ring-1 focus:ring-orange-400" value={tempBuilding.permitNumber} onChange={e => setTempBuilding({...tempBuilding, permitNumber: e.target.value})} /></div>
                      
                      <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">門牌地址</label><input placeholder="完整門牌地址" className="w-full p-3 border rounded-lg text-base outline-none focus:ring-1 focus:ring-orange-400" value={tempBuilding.address} onChange={e => setTempBuilding({...tempBuilding, address: e.target.value})} /></div>
@@ -423,7 +430,6 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
                     <div className="md:col-span-8"><input placeholder="備註說明 (用途、廠商、發票編號)..." className="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-100 bg-gray-50 focus:bg-white" value={newTx.note} onChange={e => setNewTx({...newTx, note: e.target.value})} /></div>
                     
-                    {/* ✅ 修正：加入刪除圖片按鈕 */}
                     <div className="md:col-span-2 relative">
                        <input type="file" id="fileUploadGlobal" className="hidden" accept="image/*" onChange={handleImageUpload} />
                        <label htmlFor="fileUploadGlobal" className={`flex justify-center items-center gap-2 w-full p-4 border-2 border-dashed rounded-xl text-xs font-black cursor-pointer transition-all hover:bg-blue-50 ${newTx.image ? 'bg-blue-50 border-blue-400 text-blue-600' : 'bg-gray-50 border-gray-200 text-gray-400'}`}>
@@ -512,6 +518,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                 <th className="border p-2 text-left">地段</th>
                 <th className="border p-2 text-left">地號 (詳細筆數: {lands.reduce((acc,l)=>acc+l.items.length,0)})</th>
                 <th className="border p-2 text-right">持有(m2)</th>
+                <th className="border p-2 text-right">持有(坪)</th>
                 <th className="border p-2 text-right">總金額</th>
               </tr>
             </thead>
@@ -524,6 +531,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                       {l.items.map(i => i.lotNumber).join(', ').substring(0, 50)}{l.items.length > 5 ? '...' : ''}
                   </td>
                   <td className="border p-2 text-right">{l.holdingAreaM2}</td>
+                  <td className="border p-2 text-right">{l.holdingAreaPing}</td>
                   <td className="border p-2 text-right">${Number(l.totalPrice).toLocaleString()}</td>
                 </tr>
               ))}
