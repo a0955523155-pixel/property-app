@@ -10,7 +10,7 @@ import { db, auth } from './config/firebase';
 // --- 引入 Firestore 與 Auth ---
 import { 
   collection, doc, updateDoc, addDoc, deleteDoc, 
-  onSnapshot, query, orderBy 
+  onSnapshot, query, orderBy, serverTimestamp 
 } from "firebase/firestore";
 import { 
   signInAnonymously, onAuthStateChanged 
@@ -36,7 +36,7 @@ const APP_STYLES = `
     scrollbar-width: none;
   }
   
-  /* --- 列印專用樣式 (PDF Export Settings) --- */
+  /* --- 列印專用樣式 (PDF Export Settings - 直式 A4) --- */
   @media print {
     @page { 
       size: A4 portrait; /* 直式 */
@@ -188,14 +188,14 @@ const App = () => {
     }
   };
 
-  // ✅ 修正與強化的刪除回饋功能
+  // ✅ 修正後的刪除回饋功能 (修復 Invalid document reference 錯誤)
   const deleteFeedback = async (id) => {
     if (!confirm("確定已修復此問題並移除？")) return;
     try {
-      await deleteDoc(doc(db, "feedbacks"), id);
+      // ⚠️ 關鍵修正：id 必須放在 doc() 的括號內
+      await deleteDoc(doc(db, "feedbacks", id)); 
     } catch (error) {
       console.error("Delete Feedback Error:", error);
-      // 如果權限不足，會在這裡跳出提示
       if (error.code === 'permission-denied') {
         alert("刪除失敗：權限不足。\n請到 Firebase Console > Firestore > Rules 將規則改為允許所有讀寫 (allow read, write: if true;)");
       } else {
