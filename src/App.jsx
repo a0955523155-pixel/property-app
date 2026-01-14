@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Wifi, WifiOff, Wrench, AlertCircle, LayoutGrid, FolderPlus, 
-  Home, Trash2, Calendar, CheckCircle2, XCircle, MessageSquarePlus, Send
+  AlertCircle, LayoutGrid, FolderPlus, 
+  Trash2, CheckCircle2, MessageSquarePlus, Send, ChevronDown, FolderOpen
 } from 'lucide-react';
 
 // --- 引入設定檔 ---
@@ -10,7 +10,7 @@ import { db, auth } from './config/firebase';
 // --- 引入 Firestore 與 Auth ---
 import { 
   collection, doc, updateDoc, addDoc, deleteDoc, 
-  onSnapshot, query, orderBy, serverTimestamp 
+  onSnapshot, query, orderBy 
 } from "firebase/firestore";
 import { 
   signInAnonymously, onAuthStateChanged 
@@ -39,7 +39,7 @@ const APP_STYLES = `
   /* --- 列印專用樣式 (PDF Export Settings) --- */
   @media print {
     @page { 
-      size: A4 portrait; /* ✅ 改為直式 */
+      size: A4 portrait; /* 直式 */
       margin: 10mm; 
     }
     body, #root, .app-wrapper {
@@ -48,35 +48,30 @@ const APP_STYLES = `
       overflow: visible !important;
       font-size: 10pt !important;
     }
-    /* 強制隱藏互動元素 */
     .print\\:hidden { display: none !important; }
-    /* 強制顯示列印報表 */
     .print\\:block { display: block !important; }
     .print\\:p-8 { padding: 0 !important; }
     
-    /* 表格樣式優化 (直向時特別重要，防止表格過寬) */
     table { 
       width: 100% !important; 
       border-collapse: collapse !important; 
       margin-bottom: 20px !important; 
-      table-layout: fixed; /* ✅ 強制固定寬度，避免撐破頁面 */
+      table-layout: fixed;
     }
     th, td { 
       border: 1px solid #000 !important; 
       padding: 4px 6px !important; 
       text-align: left; 
-      font-size: 9pt !important; /* ✅ 字體微調，讓直向能塞入更多內容 */
-      word-wrap: break-word; /* ✅ 長文字自動換行 */
+      font-size: 9pt !important;
+      word-wrap: break-word;
       overflow-wrap: break-word;
     }
-    /* 針對不同欄位設定寬度比例，避免建照號碼或地址擠壓 */
-    th:nth-child(1) { width: 15%; } /* 姓名/出售人 */
-    th:nth-child(2) { width: 15%; } /* 電話/建照 */
+    /* 欄位寬度微調 */
+    th:nth-child(1) { width: 15%; }
+    th:nth-child(2) { width: 15%; }
     
     thead { display: table-header-group; background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; }
     tr { break-inside: avoid; page-break-inside: avoid; }
-    
-    /* 隱藏捲軸與陰影 */
     .no-scrollbar { overflow: visible !important; }
     * { box-shadow: none !important; text-shadow: none !important; }
   }
@@ -89,7 +84,6 @@ const App = () => {
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [user, setUser] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
-  const [testResult, setTestResult] = useState(null);
 
   // 0. 注入樣式
   useEffect(() => {
@@ -119,10 +113,11 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. 監聽 Firestore (專案)
+  // 2. 監聽 Firestore (專案 - ✅ 改為按名稱 A-Z 排序)
   useEffect(() => {
     if (!user) return; 
-    const q = query(collection(db, "projects"), orderBy("updatedAt", "desc"));
+    // orderBy("name", "asc") 實現 A 到 Z 排序
+    const q = query(collection(db, "projects"), orderBy("name", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const projectsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setProjects(projectsData);
@@ -168,12 +163,12 @@ const App = () => {
     } catch (error) { console.error(error); alert("建立失敗: " + error.message); }
   };
 
-  const deleteProject = async (projectId) => {
-    if (!user) return;
+  const deleteProject = async () => {
+    if (!activeProjectId || !user) return;
     if(!confirm('確定刪除此案場？此動作不可撤銷。')) return;
     try {
-      await deleteDoc(doc(db, "projects", projectId));
-      if (activeProjectId === projectId) setActiveProjectId(null);
+      await deleteDoc(doc(db, "projects", activeProjectId));
+      setActiveProjectId(null); // 刪除後返回首頁
     } catch (error) { console.error(error); alert("刪除失敗"); }
   };
 
@@ -203,52 +198,10 @@ const App = () => {
     }
   };
 
-  const runDiagnostics = async () => {
-    setTestResult({ status: 'loading', msg: '測試寫入中...' });
-    if (!user) {
-      setTestResult({ status: 'error', msg: '使用者尚未登入' });
-      return;
-    }
-    try {
-      const testRef = await addDoc(collection(db, "_connection_test"), {
-        timestamp: serverTimestamp(),
-        test: "write_check"
-      });
-      await deleteDoc(testRef);
-      setTestResult({ status: 'success', msg: '測試成功：資料庫讀寫正常！' });
-      setTimeout(() => setTestResult(null), 3000);
-    } catch (err) {
-      setTestResult({ status: 'error', msg: err.message });
-    }
-  };
-
-  const getProjectSummary = (project) => {
-    const income = (project.transactions || []).filter(t => t.type === 'income').reduce((acc, c) => acc + Number(c.amount), 0);
-    const expense = (project.transactions || []).filter(t => t.type === 'expense').reduce((acc, c) => acc + Number(c.amount), 0);
-    return { income, expense, profit: income - expense };
-  };
+  // ✅ 已移除右上角資料庫連線與診斷按鈕
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-10 bg-gray-50 min-h-screen font-sans">
-      {/* 狀態列 */}
-      <div className="fixed top-4 right-4 z-50 flex flex-col items-end gap-2">
-        <div className={`px-4 py-2 rounded-full text-xs font-bold shadow-lg flex items-center gap-2 ${user && !errorMsg ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-          {user && !errorMsg ? <><Wifi className="w-3 h-3" /> 資料庫已連線</> : <><WifiOff className="w-3 h-3" /> {errorMsg || "連線中..."}</>}
-        </div>
-        <button onClick={runDiagnostics} className="px-4 py-2 rounded-full bg-gray-800 text-white text-xs font-bold shadow-lg flex items-center gap-2 hover:bg-black transition">
-          <Wrench className="w-3 h-3" /> 測試資料庫連線
-        </button>
-        {testResult && (
-          <div className={`mt-2 p-4 rounded-xl shadow-xl border-l-4 w-64 animate-fadeIn bg-white ${testResult.status === 'success' ? 'border-green-500' : 'border-red-500'}`}>
-            <div className={`text-xs font-black uppercase mb-1 flex items-center gap-1 ${testResult.status === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-              {testResult.status === 'success' ? <CheckCircle2 className="w-4 h-4"/> : <XCircle className="w-4 h-4"/>}
-              {testResult.status === 'success' ? '測試通過' : '測試失敗'}
-            </div>
-            <p className="text-xs text-gray-600">{testResult.msg}</p>
-          </div>
-        )}
-      </div>
-
+    <div className="max-w-6xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans">
       {/* 錯誤訊息 */}
       {errorMsg && (
         <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-6 rounded shadow-sm">
@@ -259,103 +212,119 @@ const App = () => {
 
       {/* 主路由切換 */}
       {activeProjectId ? (
-        <ProjectEditor 
-          key={activeProjectId} 
-          initialData={projects.find(p => p.id === activeProjectId)} 
-          onSave={handleSaveProject} 
-          onBack={() => setActiveProjectId(null)} 
-        />
-      ) : (
         <div className="animate-fadeIn">
-          {/* 專案列表標題 */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 gap-4">
-            <div>
-              <h1 className="text-4xl font-black text-gray-900 flex items-center gap-4">
-                <div className="bg-blue-600 p-2.5 rounded-2xl shadow-xl shadow-blue-200"><LayoutGrid className="w-10 h-10 text-white" /></div>
-                資產管理系統 (Cloud)
-              </h1>
-              <p className="text-gray-400 mt-4 font-bold tracking-[0.3em] uppercase ml-16">Yandefa Asset Management</p>
+           {/* 在專案編輯模式下，我們仍然傳入刪除功能，但通常刪除是在列表頁做，這裡僅供參考或保留結構 */}
+           <ProjectEditor 
+             key={activeProjectId} 
+             initialData={projects.find(p => p.id === activeProjectId)} 
+             onSave={handleSaveProject} 
+             onBack={() => setActiveProjectId(null)} 
+           />
+           {/* 如果需要在編輯頁刪除，可在此處添加按鈕，但通常不建議在編輯中刪除 */}
+        </div>
+      ) : (
+        <div className="animate-fadeIn flex flex-col items-center justify-center min-h-[80vh]">
+          {/* 1. 系統標題與 Logo */}
+          <div className="text-center mb-12">
+            <div className="bg-blue-600 p-4 rounded-3xl shadow-xl shadow-blue-200 inline-flex mb-6">
+              <LayoutGrid className="w-12 h-12 text-white" />
             </div>
-            <button onClick={createNewProject} className="flex items-center gap-3 px-10 py-5 bg-blue-600 text-white rounded-[2rem] hover:bg-blue-700 shadow-2xl transition-all transform hover:-translate-y-2 font-black tracking-widest uppercase">
-              <FolderPlus className="w-6 h-6" /> 建立新案場
-            </button>
+            <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight mb-2">
+              大成工業城帳務系統
+            </h1>
+            <p className="text-gray-400 font-bold tracking-[0.3em] uppercase text-sm">Dacheng Industrial City Accounting</p>
           </div>
 
-          {/* 專案卡片網格 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 mb-16">
-            {projects.length > 0 ? projects.map(project => {
-              const summary = getProjectSummary(project);
-              return (
-                <div key={project.id} onClick={() => setActiveProjectId(project.id)} className="bg-white rounded-[3rem] p-10 shadow-sm border border-gray-100 cursor-pointer hover:shadow-2xl hover:border-blue-200 transition-all duration-500 group flex flex-col h-full relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-[100px] transition-all group-hover:bg-blue-600 group-hover:scale-110 -z-10 opacity-50" />
-                  <div className="flex justify-between items-start mb-10">
-                    <div className="bg-blue-50 p-5 rounded-3xl group-hover:bg-white transition-colors duration-500 shadow-sm">
-                      <Home className="w-10 h-10 text-blue-600 group-hover:text-white" />
+          {/* 2. 案件選單區塊 (核心修改) */}
+          <div className="w-full max-w-lg bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 relative overflow-hidden group hover:shadow-2xl transition-all duration-500">
+             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-purple-500" />
+             
+             <label className="block text-gray-500 text-xs font-bold uppercase tracking-widest mb-4 ml-1">
+               選擇案件以開始管理 (Select Project)
+             </label>
+
+             <div className="relative">
+               <select 
+                 className="w-full p-5 pl-12 pr-10 bg-gray-50 border-2 border-gray-100 rounded-2xl text-lg font-bold text-gray-800 appearance-none outline-none focus:border-blue-500 focus:bg-white transition-all cursor-pointer shadow-inner"
+                 onChange={(e) => {
+                    if(e.target.value === "new") {
+                        createNewProject();
+                    } else if (e.target.value) {
+                        setActiveProjectId(e.target.value);
+                    }
+                 }}
+                 defaultValue=""
+               >
+                 <option value="" disabled>請選擇現有案件...</option>
+                 {projects.map(p => (
+                   <option key={p.id} value={p.id}>{p.name}</option>
+                 ))}
+                 <option value="" disabled>──────────</option>
+                 <option value="new" className="text-blue-600 font-bold">+ 建立新案件</option>
+               </select>
+               <FolderOpen className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+               <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
+             </div>
+
+             <div className="mt-8 pt-6 border-t border-gray-50 flex flex-col md:flex-row gap-4 justify-between items-center text-sm text-gray-400">
+                <span>目前共有 <span className="text-blue-600 font-black">{projects.length}</span> 筆案件資料</span>
+                
+                {/* 獨立的新增按鈕 (備用) */}
+                <button 
+                  onClick={createNewProject}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition font-bold text-xs"
+                >
+                  <FolderPlus className="w-4 h-4" /> 快速建立
+                </button>
+             </div>
+          </div>
+
+          {/* 3. 問題回饋 (Issue Tracker) */}
+          <div className="w-full max-w-4xl mt-20">
+            <div className="bg-yellow-50/80 border-2 border-yellow-200 rounded-[2rem] p-8 shadow-lg relative overflow-hidden backdrop-blur-sm">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-200 rounded-bl-full opacity-50 -mr-10 -mt-10"></div>
+              
+              <h3 className="text-lg font-black text-yellow-800 mb-6 flex items-center gap-2">
+                <MessageSquarePlus className="w-5 h-5" /> 系統問題與需求回饋 (Developer Notes)
+              </h3>
+              
+              <form onSubmit={submitFeedback} className="flex gap-3 mb-6">
+                <input 
+                  type="text" 
+                  placeholder="在此記錄系統問題或新功能需求 (Bug / Feature Request)..." 
+                  className="flex-1 p-3 px-5 rounded-xl border-2 border-yellow-200 bg-white/80 focus:bg-white focus:outline-none focus:border-yellow-500 shadow-sm transition-all"
+                  value={newFeedback}
+                  onChange={(e) => setNewFeedback(e.target.value)}
+                />
+                <button type="submit" className="bg-yellow-600 text-white px-5 rounded-xl hover:bg-yellow-700 transition font-bold flex items-center gap-2 shadow-md">
+                  <Send className="w-4 h-4" /> 記錄
+                </button>
+              </form>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                {feedbacks.length > 0 ? feedbacks.map(item => (
+                  <div key={item.id} className="bg-white p-3 px-4 rounded-xl shadow-sm border border-yellow-100 flex justify-between items-center group hover:shadow-md transition">
+                    <div className="flex items-center gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0"></div>
+                      <span className="text-gray-700 font-medium text-sm">{item.content}</span>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); deleteProject(project.id); }} className="text-gray-200 hover:text-red-500 transition-all p-3 rounded-full hover:bg-red-50"><Trash2 className="w-6 h-6" /></button>
+                    <div className="flex items-center gap-3">
+                       <span className="text-[10px] text-gray-300 font-mono hidden md:block">{new Date(item.createdAt).toLocaleDateString()}</span>
+                       <button 
+                        onClick={() => deleteFeedback(item.id)} 
+                        className="text-gray-300 hover:text-green-600 hover:bg-green-50 p-1.5 rounded-full transition"
+                        title="標記為已修復/移除"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <h3 className="text-2xl font-black text-gray-800 mb-3 line-clamp-2 min-h-[4.5rem] leading-tight">{project.name}</h3>
-                  <div className="flex items-center gap-2 text-[10px] font-black text-gray-300 uppercase tracking-widest mb-12">
-                    <Calendar className="w-4 h-4" /> 更新日期: {new Date(project.updatedAt).toLocaleDateString()}
+                )) : (
+                  <div className="text-center text-gray-400 py-2 text-sm italic">
+                    目前沒有待處理的問題，系統運作良好！ 👍
                   </div>
-                  <div className="mt-auto pt-8 border-t border-gray-50 grid grid-cols-2 gap-6">
-                    <div><div className="text-[10px] text-gray-400 font-black uppercase mb-2">案場成本</div><div className="font-mono font-black text-gray-700 text-lg">${summary.expense.toLocaleString()}</div></div>
-                    <div><div className="text-[10px] text-gray-400 font-black uppercase mb-2">目前盈虧</div><div className={`font-mono font-black text-lg ${summary.profit >= 0 ? 'text-blue-600' : 'text-orange-500'}`}>${summary.profit.toLocaleString()}</div></div>
-                  </div>
-                </div>
-              );
-            }) : (
-              <div className="col-span-full text-center py-20 text-gray-400 font-bold bg-gray-100 rounded-[3rem] border-2 border-dashed border-gray-300">
-                {user ? "目前資料庫中無案場資料，請點擊上方按鈕建立。" : "正在連接安全資料庫..."}
+                )}
               </div>
-            )}
-          </div>
-
-          {/* 問題回饋區塊 */}
-          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-[2rem] p-8 max-w-4xl mx-auto shadow-xl relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-200 rounded-bl-full opacity-50 -mr-10 -mt-10"></div>
-            
-            <h3 className="text-xl font-black text-yellow-800 mb-6 flex items-center gap-2">
-              <MessageSquarePlus className="w-6 h-6" /> 系統問題與需求回饋 (Developer Notes)
-            </h3>
-            
-            <form onSubmit={submitFeedback} className="flex gap-4 mb-8">
-              <input 
-                type="text" 
-                placeholder="在此記錄系統問題或新功能需求 (Bug / Feature Request)..." 
-                className="flex-1 p-4 rounded-xl border-2 border-yellow-200 bg-white focus:outline-none focus:border-yellow-500 shadow-sm"
-                value={newFeedback}
-                onChange={(e) => setNewFeedback(e.target.value)}
-              />
-              <button type="submit" className="bg-yellow-600 text-white px-6 rounded-xl hover:bg-yellow-700 transition font-bold flex items-center gap-2 shadow-lg">
-                <Send className="w-4 h-4" /> 記錄
-              </button>
-            </form>
-
-            <div className="space-y-3">
-              {feedbacks.length > 0 ? feedbacks.map(item => (
-                <div key={item.id} className="bg-white p-4 rounded-xl shadow-sm border border-yellow-100 flex justify-between items-center group hover:shadow-md transition">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1 w-2 h-2 rounded-full bg-yellow-400 shrink-0"></div>
-                    <div>
-                      <p className="text-gray-800 font-medium">{item.content}</p>
-                      <p className="text-xs text-gray-400 mt-1">{new Date(item.createdAt).toLocaleString()}</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => deleteFeedback(item.id)} 
-                    className="text-gray-300 hover:text-green-600 hover:bg-green-50 p-2 rounded-full transition flex items-center gap-2"
-                    title="標記為已修復/移除"
-                  >
-                    <span className="text-xs font-bold hidden group-hover:inline">已修復</span>
-                    <CheckCircle2 className="w-5 h-5" />
-                  </button>
-                </div>
-              )) : (
-                <div className="text-center text-gray-400 py-4 italic">
-                  目前沒有待處理的問題，系統運作良好！ 👍
-                </div>
-              )}
             </div>
           </div>
 
