@@ -113,10 +113,9 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. 監聽 Firestore (專案 - ✅ 改為按名稱 A-Z 排序)
+  // 2. 監聽 Firestore (專案 - 按名稱排序)
   useEffect(() => {
     if (!user) return; 
-    // orderBy("name", "asc") 實現 A 到 Z 排序
     const q = query(collection(db, "projects"), orderBy("name", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const projectsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -168,7 +167,7 @@ const App = () => {
     if(!confirm('確定刪除此案場？此動作不可撤銷。')) return;
     try {
       await deleteDoc(doc(db, "projects", activeProjectId));
-      setActiveProjectId(null); // 刪除後返回首頁
+      setActiveProjectId(null); 
     } catch (error) { console.error(error); alert("刪除失敗"); }
   };
 
@@ -185,20 +184,25 @@ const App = () => {
       setNewFeedback("");
     } catch (error) {
       console.error("Feedback Error:", error);
-      alert("提交失敗");
+      alert("提交失敗：" + error.message);
     }
   };
 
+  // ✅ 修正與強化的刪除回饋功能
   const deleteFeedback = async (id) => {
     if (!confirm("確定已修復此問題並移除？")) return;
     try {
       await deleteDoc(doc(db, "feedbacks"), id);
     } catch (error) {
       console.error("Delete Feedback Error:", error);
+      // 如果權限不足，會在這裡跳出提示
+      if (error.code === 'permission-denied') {
+        alert("刪除失敗：權限不足。\n請到 Firebase Console > Firestore > Rules 將規則改為允許所有讀寫 (allow read, write: if true;)");
+      } else {
+        alert("刪除失敗：" + error.message);
+      }
     }
   };
-
-  // ✅ 已移除右上角資料庫連線與診斷按鈕
 
   return (
     <div className="max-w-6xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans">
@@ -213,14 +217,12 @@ const App = () => {
       {/* 主路由切換 */}
       {activeProjectId ? (
         <div className="animate-fadeIn">
-           {/* 在專案編輯模式下，我們仍然傳入刪除功能，但通常刪除是在列表頁做，這裡僅供參考或保留結構 */}
            <ProjectEditor 
              key={activeProjectId} 
              initialData={projects.find(p => p.id === activeProjectId)} 
              onSave={handleSaveProject} 
              onBack={() => setActiveProjectId(null)} 
            />
-           {/* 如果需要在編輯頁刪除，可在此處添加按鈕，但通常不建議在編輯中刪除 */}
         </div>
       ) : (
         <div className="animate-fadeIn flex flex-col items-center justify-center min-h-[80vh]">
@@ -235,7 +237,7 @@ const App = () => {
             <p className="text-gray-400 font-bold tracking-[0.3em] uppercase text-sm">Dacheng Industrial City Accounting</p>
           </div>
 
-          {/* 2. 案件選單區塊 (核心修改) */}
+          {/* 2. 案件選單區塊 */}
           <div className="w-full max-w-lg bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 relative overflow-hidden group hover:shadow-2xl transition-all duration-500">
              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-purple-500" />
              
@@ -269,7 +271,6 @@ const App = () => {
              <div className="mt-8 pt-6 border-t border-gray-50 flex flex-col md:flex-row gap-4 justify-between items-center text-sm text-gray-400">
                 <span>目前共有 <span className="text-blue-600 font-black">{projects.length}</span> 筆案件資料</span>
                 
-                {/* 獨立的新增按鈕 (備用) */}
                 <button 
                   onClick={createNewProject}
                   className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition font-bold text-xs"
