@@ -7,7 +7,7 @@ import {
 import { CATEGORIES, PREDEFINED_SELLERS, toPing, createEmptyLandItem, exportMasterCSV } from '../utils/helpers';
 import LinkedLedger from './LinkedLedger';
 
-// ✅ 新增：資料清洗函式 (解決 Firestore 不支援 undefined 的問題)
+// ✅ 1. 資料清洗函式 (修復 Firestore 儲存錯誤關鍵)
 const removeUndefined = (obj) => {
   if (obj === undefined) return null;
   if (obj === null || typeof obj !== 'object') return obj;
@@ -19,11 +19,8 @@ const removeUndefined = (obj) => {
   const newObj = {};
   for (const key in obj) {
     const val = removeUndefined(obj[key]);
-    if (val !== undefined) {
-      newObj[key] = val;
-    } else {
-      newObj[key] = null; // 強制將 undefined 轉為 null
-    }
+    // 確保不會有 undefined 進入資料庫
+    newObj[key] = val === undefined ? null : val;
   }
   return newObj;
 };
@@ -103,7 +100,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     return { totalIncome, totalExpense, netProfit, roi, subTotals };
   }, [transactions]);
 
-  // --- ✅ 自動儲存 (使用 removeUndefined 進行清洗) ---
+  // --- ✅ 2. 自動儲存 (套用 removeUndefined) ---
   useEffect(() => {
     if (!initialData) return;
     const timer = setTimeout(() => {
@@ -118,7 +115,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
         updatedAt: new Date().toISOString() 
       };
       
-      // 清洗資料後再儲存
+      // 這裡使用了清洗函式，解決 "invalid nested entity" 錯誤
       onSave(removeUndefined(rawData));
       
     }, 1500);
@@ -143,7 +140,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     } 
   };
 
-  // --- 土地操作函式 ---
+  // --- ✅ 3. 補回遺失的土地操作函式 (修復 ReferenceError) ---
   const addLandSeller = () => { 
     if (!tempLandSeller.name) return; 
     setTempLand({ ...tempLand, sellers: [...tempLand.sellers, { id: Date.now(), ...tempLandSeller }] }); 
@@ -185,6 +182,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
       const hM2 = Number(item.areaM2) * (Number(item.shareNum) / Number(item.shareDenom));
       totalM2 += hM2; totalPingSum += toPing(hM2); totalPriceSum += (Number(item.subtotal) || 0);
     });
+    // 確保小數點 3 位
     const landData = { ...tempLand, holdingAreaM2: totalM2.toFixed(3), holdingAreaPing: totalPingSum.toFixed(3), totalPrice: totalPriceSum };
     if (editingLandId) setLands(lands.map(l => l.id === editingLandId ? { ...landData, id: l.id } : l));
     else setLands([...lands, { ...landData, id: Date.now() }]);
