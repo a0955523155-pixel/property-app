@@ -7,6 +7,27 @@ import {
 import { CATEGORIES, PREDEFINED_SELLERS, toPing, createEmptyLandItem, exportMasterCSV } from '../utils/helpers';
 import LinkedLedger from './LinkedLedger';
 
+// ✅ 新增：資料清洗函式 (解決 Firestore 不支援 undefined 的問題)
+const removeUndefined = (obj) => {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  
+  if (Array.isArray(obj)) {
+    return obj.map(removeUndefined);
+  }
+  
+  const newObj = {};
+  for (const key in obj) {
+    const val = removeUndefined(obj[key]);
+    if (val !== undefined) {
+      newObj[key] = val;
+    } else {
+      newObj[key] = null; // 強制將 undefined 轉為 null
+    }
+  }
+  return newObj;
+};
+
 const ProjectEditor = ({ initialData, onSave, onBack }) => {
   if (!initialData) return null;
 
@@ -51,10 +72,11 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
   const [editingTxId, setEditingTxId] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
 
-  // 6. 交屋點交確認資料
-  const [handoverData, setHandoverData] = useState(initialData.handoverData || {
+  // 6. 交屋點交確認資料 (合併預設值，防止舊資料缺欄位)
+  const defaultHandover = {
     remotes: "0", keysFront: "0", keysBack: "0", warranty: false, drawings: false, electricityBill: "", waterBill: "", originalPermit: false
-  });
+  };
+  const [handoverData, setHandoverData] = useState({ ...defaultHandover, ...(initialData.handoverData || {}) });
 
   // --- 計算邏輯 ---
   const landGrandTotal = useMemo(() => {
@@ -81,13 +103,24 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     return { totalIncome, totalExpense, netProfit, roi, subTotals };
   }, [transactions]);
 
-  // --- 自動儲存 ---
+  // --- ✅ 自動儲存 (使用 removeUndefined 進行清洗) ---
   useEffect(() => {
     if (!initialData) return;
     const timer = setTimeout(() => {
-      onSave({ 
-        id: initialData.id, name: projectName, buyers, lands, buildings, transactions, handoverData, updatedAt: new Date().toISOString() 
-      });
+      const rawData = { 
+        id: initialData.id, 
+        name: projectName, 
+        buyers, 
+        lands, 
+        buildings, 
+        transactions, 
+        handoverData, 
+        updatedAt: new Date().toISOString() 
+      };
+      
+      // 清洗資料後再儲存
+      onSave(removeUndefined(rawData));
+      
     }, 1500);
     return () => clearTimeout(timer);
   }, [projectName, buyers, lands, buildings, transactions, handoverData]);
@@ -110,7 +143,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     } 
   };
 
-  // --- ✅ 土地操作函式 (補回這裡) ---
+  // --- 土地操作函式 ---
   const addLandSeller = () => { 
     if (!tempLandSeller.name) return; 
     setTempLand({ ...tempLand, sellers: [...tempLand.sellers, { id: Date.now(), ...tempLandSeller }] }); 
@@ -192,6 +225,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     setEditingTxId(null);
   };
 
+  // --- 匯出與列印 ---
   const handleExport = () => exportMasterCSV(projectName, buyers, lands, buildings, transactions, handoverData);
   const handlePrint = () => window.print();
 
@@ -394,9 +428,9 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                       <div className="flex flex-col md:flex-row gap-4 mb-4">
                          <div className="flex-1"><input list="pre-sellers" placeholder="姓名" className="w-full p-3 border rounded-lg text-base outline-none bg-white" value={tempBuildingSeller.name} onChange={e => setTempBuildingSeller({...tempBuildingSeller, name: e.target.value})} /></div>
                          <input placeholder="電話" className="flex-1 p-3 border rounded-lg text-base outline-none bg-white" value={tempBuildingSeller.phone} onChange={e => setTempBuildingSeller({...tempBuildingSeller, phone: e.target.value})} />
-                         <button onClick={addBuildingSeller} className="bg-orange-600 text-white px-8 rounded-lg text-sm hover:bg-orange-700 transition shadow-sm font-bold">加入</button>
+                         <button onClick={() => { if (!tempBuildingSeller.name) return; setTempBuilding({ ...tempBuilding, sellers: [...tempBuilding.sellers, { id: Date.now(), ...tempBuildingSeller }] }); setTempBuildingSeller({ name: "", phone: "", address: "" }); }} className="bg-orange-600 text-white px-8 rounded-lg text-sm hover:bg-orange-700 transition shadow-sm font-bold">加入</button>
                       </div>
-                      <div className="space-y-2">{tempBuilding.sellers.map(s => <div key={s.id} className="text-sm flex justify-between items-center p-3 bg-white border rounded-lg shadow-sm"><span>{s.name} | {s.phone}</span> <button onClick={() => removeBuildingSeller(s.id)} className="text-red-400 hover:bg-red-50 p-1 rounded-full"><Trash2 className="w-4 h-4" /></button></div>)}</div>
+                      <div className="space-y-2">{tempBuilding.sellers.map(s => <div key={s.id} className="text-sm flex justify-between items-center p-3 bg-white border rounded-lg shadow-sm"><span>{s.name} | {s.phone}</span> <button onClick={() => setTempBuilding({ ...tempBuilding, sellers: tempBuilding.sellers.filter(x => x.id !== s.id) })} className="text-red-400 hover:bg-red-50 p-1 rounded-full"><Trash2 className="w-4 h-4" /></button></div>)}</div>
                    </div>
                    <button onClick={saveBuilding} className="w-full py-5 rounded-2xl text-white font-black bg-orange-600 shadow-xl transition-all hover:bg-orange-700 hover:scale-[1.01] tracking-widest uppercase font-bold text-lg">儲存建物標的</button>
                 </div>
