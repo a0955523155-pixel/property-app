@@ -7,22 +7,15 @@ import {
 import { CATEGORIES, PREDEFINED_SELLERS, toPing, createEmptyLandItem, exportMasterCSV } from '../utils/helpers';
 import LinkedLedger from './LinkedLedger';
 
-// ✅ 1. 資料清洗函式 (修復 Firestore 儲存錯誤關鍵)
-const removeUndefined = (obj) => {
-  if (obj === undefined) return null;
-  if (obj === null || typeof obj !== 'object') return obj;
-  
-  if (Array.isArray(obj)) {
-    return obj.map(removeUndefined);
+// ✅ 1. 終極資料清洗函式 (徹底解決 Firebase 儲存錯誤)
+// 使用 JSON 序列化技巧，會自動移除所有 undefined 和不合法的物件
+const cleanDataForFirebase = (data) => {
+  try {
+    return JSON.parse(JSON.stringify(data));
+  } catch (err) {
+    console.error("Data cleanup failed:", err);
+    return data;
   }
-  
-  const newObj = {};
-  for (const key in obj) {
-    const val = removeUndefined(obj[key]);
-    // 確保不會有 undefined 進入資料庫
-    newObj[key] = val === undefined ? null : val;
-  }
-  return newObj;
 };
 
 const ProjectEditor = ({ initialData, onSave, onBack }) => {
@@ -69,7 +62,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
   const [editingTxId, setEditingTxId] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
 
-  // 6. 交屋點交確認資料 (合併預設值，防止舊資料缺欄位)
+  // 6. 交屋點交確認資料
   const defaultHandover = {
     remotes: "0", keysFront: "0", keysBack: "0", warranty: false, drawings: false, electricityBill: "", waterBill: "", originalPermit: false
   };
@@ -100,7 +93,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     return { totalIncome, totalExpense, netProfit, roi, subTotals };
   }, [transactions]);
 
-  // --- ✅ 2. 自動儲存 (套用 removeUndefined) ---
+  // --- ✅ 2. 自動儲存 (使用 cleanDataForFirebase) ---
   useEffect(() => {
     if (!initialData) return;
     const timer = setTimeout(() => {
@@ -115,8 +108,9 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
         updatedAt: new Date().toISOString() 
       };
       
-      // 這裡使用了清洗函式，解決 "invalid nested entity" 錯誤
-      onSave(removeUndefined(rawData));
+      // 使用更強力的清洗函式
+      const cleanedData = cleanDataForFirebase(rawData);
+      onSave(cleanedData);
       
     }, 1500);
     return () => clearTimeout(timer);
@@ -140,7 +134,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     } 
   };
 
-  // --- ✅ 3. 補回遺失的土地操作函式 (修復 ReferenceError) ---
+  // --- 土地操作函式 ---
   const addLandSeller = () => { 
     if (!tempLandSeller.name) return; 
     setTempLand({ ...tempLand, sellers: [...tempLand.sellers, { id: Date.now(), ...tempLandSeller }] }); 
@@ -433,6 +427,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                    <button onClick={saveBuilding} className="w-full py-5 rounded-2xl text-white font-black bg-orange-600 shadow-xl transition-all hover:bg-orange-700 hover:scale-[1.01] tracking-widest uppercase font-bold text-lg">儲存建物標的</button>
                 </div>
               )}
+              {/* Building List */}
               <div className="grid grid-cols-1 gap-6">
                 {buildings.map(b => (
                   <div key={b.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 hover:shadow-xl hover:border-orange-100 transition-all duration-500 group">
