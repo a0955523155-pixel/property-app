@@ -7,15 +7,30 @@ import {
 import { CATEGORIES, PREDEFINED_SELLERS, toPing, createEmptyLandItem, exportMasterCSV } from '../utils/helpers';
 import LinkedLedger from './LinkedLedger';
 
-// ✅ 1. 終極資料清洗函式 (徹底解決 Firebase 儲存錯誤)
-// 使用 JSON 序列化技巧，會自動移除所有 undefined 和不合法的物件
-const cleanDataForFirebase = (data) => {
-  try {
-    return JSON.parse(JSON.stringify(data));
-  } catch (err) {
-    console.error("Data cleanup failed:", err);
-    return data;
+// ✅ 1. 嚴格資料清洗函式 (徹底解決 Firebase 儲存錯誤)
+const sanitizeForFirestore = (data) => {
+  // 情況 A: 如果是 undefined，強制轉為 null (Firestore 接受 null)
+  if (data === undefined) return null;
+  
+  // 情況 B: 如果是 null 或基本型別 (字串, 數字, 布林)，直接回傳
+  if (data === null || typeof data !== 'object') return data;
+
+  // 情況 C: 如果是陣列 (Array)
+  if (Array.isArray(data)) {
+    // 遞迴處理陣列中的每一個項目
+    return data.map(item => sanitizeForFirestore(item));
   }
+
+  // 情況 D: 如果是物件 (Object)
+  const sanitizedObj = {};
+  Object.keys(data).forEach(key => {
+    const value = data[key];
+    // 忽略函式或 Symbol，其他都遞迴處理
+    if (typeof value !== 'function' && typeof value !== 'symbol') {
+      sanitizedObj[key] = sanitizeForFirestore(value);
+    }
+  });
+  return sanitizedObj;
 };
 
 const ProjectEditor = ({ initialData, onSave, onBack }) => {
@@ -93,7 +108,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     return { totalIncome, totalExpense, netProfit, roi, subTotals };
   }, [transactions]);
 
-  // --- ✅ 2. 自動儲存 (使用 cleanDataForFirebase) ---
+  // --- ✅ 2. 自動儲存 (套用 sanitizeForFirestore) ---
   useEffect(() => {
     if (!initialData) return;
     const timer = setTimeout(() => {
@@ -108,8 +123,8 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
         updatedAt: new Date().toISOString() 
       };
       
-      // 使用更強力的清洗函式
-      const cleanedData = cleanDataForFirebase(rawData);
+      // 使用嚴格清洗函式，確保沒有 undefined 進入陣列
+      const cleanedData = sanitizeForFirestore(rawData);
       onSave(cleanedData);
       
     }, 1500);
@@ -427,7 +442,6 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                    <button onClick={saveBuilding} className="w-full py-5 rounded-2xl text-white font-black bg-orange-600 shadow-xl transition-all hover:bg-orange-700 hover:scale-[1.01] tracking-widest uppercase font-bold text-lg">儲存建物標的</button>
                 </div>
               )}
-              {/* Building List */}
               <div className="grid grid-cols-1 gap-6">
                 {buildings.map(b => (
                   <div key={b.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 hover:shadow-xl hover:border-orange-100 transition-all duration-500 group">
