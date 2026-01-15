@@ -7,27 +7,29 @@ import {
 import { CATEGORIES, PREDEFINED_SELLERS, toPing, createEmptyLandItem, exportMasterCSV } from '../utils/helpers';
 import LinkedLedger from './LinkedLedger';
 
-// ✅ 1. 嚴格資料清洗函式 (徹底解決 Firebase 儲存錯誤)
-const sanitizeForFirestore = (data) => {
-  // 情況 A: 如果是 undefined，強制轉為 null (Firestore 接受 null)
+// ✅ 1. 強制資料清洗函式 (The Sanitizer)
+// 這會遞迴檢查所有資料，強制將 undefined 轉為 null，並確保陣列內沒有非法物件
+const deepSanitize = (data) => {
+  // 如果是 undefined，強制轉為 null (Firestore 接受 null，不接受 undefined)
   if (data === undefined) return null;
   
-  // 情況 B: 如果是 null 或基本型別 (字串, 數字, 布林)，直接回傳
+  // 如果是 null, 字串, 數字, 布林值，直接回傳
   if (data === null || typeof data !== 'object') return data;
 
-  // 情況 C: 如果是陣列 (Array)
+  // 如果是陣列，遞迴處理每一個元素
   if (Array.isArray(data)) {
-    // 遞迴處理陣列中的每一個項目
-    return data.map(item => sanitizeForFirestore(item));
+    return data.map(item => deepSanitize(item));
   }
 
-  // 情況 D: 如果是物件 (Object)
+  // 如果是物件，遞迴處理每一個值
   const sanitizedObj = {};
   Object.keys(data).forEach(key => {
     const value = data[key];
-    // 忽略函式或 Symbol，其他都遞迴處理
+    // 排除函式和 Symbol，確保只留資料
     if (typeof value !== 'function' && typeof value !== 'symbol') {
-      sanitizedObj[key] = sanitizeForFirestore(value);
+      sanitizedObj[key] = deepSanitize(value);
+    } else {
+      sanitizedObj[key] = null; // 非法型別轉為 null
     }
   });
   return sanitizedObj;
@@ -108,7 +110,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     return { totalIncome, totalExpense, netProfit, roi, subTotals };
   }, [transactions]);
 
-  // --- ✅ 2. 自動儲存 (套用 sanitizeForFirestore) ---
+  // --- ✅ 2. 自動儲存 (應用 deepSanitize) ---
   useEffect(() => {
     if (!initialData) return;
     const timer = setTimeout(() => {
@@ -123,9 +125,9 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
         updatedAt: new Date().toISOString() 
       };
       
-      // 使用嚴格清洗函式，確保沒有 undefined 進入陣列
-      const cleanedData = sanitizeForFirestore(rawData);
-      onSave(cleanedData);
+      // ✅ 關鍵修復：儲存前強制清洗資料
+      const cleanData = deepSanitize(rawData);
+      onSave(cleanData);
       
     }, 1500);
     return () => clearTimeout(timer);
