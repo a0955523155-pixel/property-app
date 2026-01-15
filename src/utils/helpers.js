@@ -23,17 +23,18 @@ export const createEmptyLandItem = () => ({
   subtotal: "" 
 });
 
-// CSV 匯出邏輯 (✅ 已修正：強制所有面積相關欄位為 3 位小數)
-export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions) => {
+// ✅ CSV 匯出邏輯 (更新：加入點交資料與新欄位)
+export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions, handoverData) => {
     let csvContent = "\uFEFF"; 
     csvContent += `=== 專案報表: ${projectName} ===\n`;
     csvContent += `匯出日期,${new Date().toLocaleString()}\n\n`;
 
     // 1. 買受人資料
     csvContent += "=== 買受人資訊 ===\n";
-    csvContent += "姓名,電話,地址\n";
+    csvContent += "姓名,電話,地址,備註/圖檔狀態\n";
     buyers.forEach(b => {
-        csvContent += `"${b.name}","${b.phone}","${b.address}"\n`;
+        const hasImage = b.image ? "有圖檔" : "無";
+        csvContent += `"${b.name}","${b.phone}","${b.address}","${hasImage}"\n`;
     });
     csvContent += "\n";
 
@@ -43,7 +44,6 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     lands.forEach(l => {
       const sellersStr = l.sellers.map(s => s.name).join(';');
       l.items.forEach(item => {
-        // ✅ 修正：個別地號面積改為 3 位
         const hM2 = (Number(item.areaM2) * (Number(item.shareNum) / Number(item.shareDenom))).toFixed(3);
         const hPing = toPing(hM2).toFixed(3);
         csvContent += `"${sellersStr}",${l.section},${item.lotNumber},${hM2},${hPing},${item.pricePerPing},${item.subtotal}\n`;
@@ -51,12 +51,17 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 3. 建物資料 (包含建照號碼)
+    // 3. 建物資料 (包含建照號碼、圖片狀態)
     csvContent += "=== 建物標的清單 ===\n";
-    csvContent += "出售人/屋主,建照號碼,門牌地址,使照號碼,建號,面積(m2),單價(元/坪),成交總額($)\n";
+    csvContent += "出售人/屋主,建照號碼,門牌地址,使照號碼,建號,面積(m2),單價(元/坪),成交總額($),圖檔狀態\n";
     buildings.forEach(b => {
         const sellersStr = b.sellers.map(s => s.name).join(';');
-        csvContent += `"${sellersStr}","${b.permitNumber || ''}","${b.address}","${b.license}","${b.buildNumber}",${b.areaM2},${b.pricePerUnit},${b.totalPrice}\n`;
+        const imgStatus = [];
+        if(b.permitImage) imgStatus.push("建照圖");
+        if(b.licenseImage) imgStatus.push("使照圖");
+        if(b.buildNoImage) imgStatus.push("建號圖");
+        
+        csvContent += `"${sellersStr}","${b.permitNumber || ''}","${b.address}","${b.license}","${b.buildNumber}",${b.areaM2},${b.pricePerUnit},${b.totalPrice},"${imgStatus.join(';')}"\n`;
     });
     csvContent += "\n";
 
@@ -70,6 +75,21 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
         
         csvContent += `${t.date},${t.type === 'income' ? '收入' : '支出'},${t.category},${t.linkedType},"${linkedLabel}",${t.amount},"${t.note}"\n`;
     });
+    csvContent += "\n";
+
+    // 5. ✅ 新增：點交確認單
+    if (handoverData) {
+      csvContent += "=== 交屋點交確認單 ===\n";
+      csvContent += "項目,內容/數量\n";
+      csvContent += `遙控器,${handoverData.remotes} 顆\n`;
+      csvContent += `小門鑰匙(前),${handoverData.keysFront} 支\n`;
+      csvContent += `小門鑰匙(後),${handoverData.keysBack} 支\n`;
+      csvContent += `廠房保固書,${handoverData.warranty ? "有" : "無"}\n`;
+      csvContent += `廠房竣工圖,${handoverData.drawings ? "有" : "無"}\n`;
+      csvContent += `使用執照正本,${handoverData.originalPermit ? "有" : "無"}\n`;
+      csvContent += `電單度數,${handoverData.electricityBill}\n`;
+      csvContent += `水單度數,${handoverData.waterBill}\n`;
+    }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
