@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   AlertCircle, LayoutGrid, FolderPlus, 
-  Trash2, CheckCircle2, MessageSquarePlus, Send, ChevronDown, FolderOpen
+  Trash2, CheckCircle2, MessageSquarePlus, Send, ChevronDown, FolderOpen, PieChart
 } from 'lucide-react';
 
 // --- 引入設定檔 ---
@@ -18,6 +18,7 @@ import {
 
 // 引入子元件
 import ProjectEditor from './components/ProjectEditor';
+import ProjectSummaryReport from './components/ProjectSummaryReport'; // ✅ 引入新元件
 
 // --- CSS Styles (包含列印設定) ---
 const APP_STYLES = `
@@ -81,7 +82,11 @@ const App = () => {
   const [projects, setProjects] = useState([]);
   const [feedbacks, setFeedbacks] = useState([]);
   const [newFeedback, setNewFeedback] = useState("");
+  
+  // 頁面狀態控制
   const [activeProjectId, setActiveProjectId] = useState(null);
+  const [showSummaryReport, setShowSummaryReport] = useState(false); // ✅ 新增：控制顯示總表頁面
+
   const [user, setUser] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
 
@@ -162,15 +167,6 @@ const App = () => {
     } catch (error) { console.error(error); alert("建立失敗: " + error.message); }
   };
 
-  const deleteProject = async () => {
-    if (!activeProjectId || !user) return;
-    if(!confirm('確定刪除此案場？此動作不可撤銷。')) return;
-    try {
-      await deleteDoc(doc(db, "projects", activeProjectId));
-      setActiveProjectId(null); 
-    } catch (error) { console.error(error); alert("刪除失敗"); }
-  };
-
   const submitFeedback = async (e) => {
     e.preventDefault();
     if (!newFeedback.trim()) return;
@@ -188,11 +184,9 @@ const App = () => {
     }
   };
 
-  // ✅ 修正後的刪除回饋功能 (修復 Invalid document reference 錯誤)
   const deleteFeedback = async (id) => {
     if (!confirm("確定已修復此問題並移除？")) return;
     try {
-      // ⚠️ 關鍵修正：id 必須放在 doc() 的括號內
       await deleteDoc(doc(db, "feedbacks", id)); 
     } catch (error) {
       console.error("Delete Feedback Error:", error);
@@ -204,6 +198,37 @@ const App = () => {
     }
   };
 
+  // --- 頁面渲染邏輯 ---
+  
+  // 1. 顯示全區總表
+  if (showSummaryReport) {
+    return (
+      <div className="max-w-7xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans">
+        <ProjectSummaryReport 
+          projects={projects} 
+          onBack={() => setShowSummaryReport(false)} 
+        />
+      </div>
+    );
+  }
+
+  // 2. 顯示單一案件編輯
+  if (activeProjectId) {
+    return (
+      <div className="max-w-6xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans">
+        <div className="animate-fadeIn">
+           <ProjectEditor 
+             key={activeProjectId} 
+             initialData={projects.find(p => p.id === activeProjectId)} 
+             onSave={handleSaveProject} 
+             onBack={() => setActiveProjectId(null)} 
+           />
+        </div>
+      </div>
+    );
+  }
+
+  // 3. 顯示首頁 (選擇案件)
   return (
     <div className="max-w-6xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans">
       {/* 錯誤訊息 */}
@@ -214,18 +239,7 @@ const App = () => {
         </div>
       )}
 
-      {/* 主路由切換 */}
-      {activeProjectId ? (
-        <div className="animate-fadeIn">
-           <ProjectEditor 
-             key={activeProjectId} 
-             initialData={projects.find(p => p.id === activeProjectId)} 
-             onSave={handleSaveProject} 
-             onBack={() => setActiveProjectId(null)} 
-           />
-        </div>
-      ) : (
-        <div className="animate-fadeIn flex flex-col items-center justify-center min-h-[80vh]">
+      <div className="animate-fadeIn flex flex-col items-center justify-center min-h-[80vh]">
           {/* 1. 系統標題與 Logo */}
           <div className="text-center mb-12">
             <div className="bg-blue-600 p-4 rounded-3xl shadow-xl shadow-blue-200 inline-flex mb-6">
@@ -245,7 +259,7 @@ const App = () => {
                選擇案件以開始管理 (Select Project)
              </label>
 
-             <div className="relative">
+             <div className="relative mb-6">
                <select 
                  className="w-full p-5 pl-12 pr-10 bg-gray-50 border-2 border-gray-100 rounded-2xl text-lg font-bold text-gray-800 appearance-none outline-none focus:border-blue-500 focus:bg-white transition-all cursor-pointer shadow-inner"
                  onChange={(e) => {
@@ -268,15 +282,24 @@ const App = () => {
                <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
              </div>
 
-             <div className="mt-8 pt-6 border-t border-gray-50 flex flex-col md:flex-row gap-4 justify-between items-center text-sm text-gray-400">
-                <span>目前共有 <span className="text-blue-600 font-black">{projects.length}</span> 筆案件資料</span>
-                
+             {/* ✅ 新增功能按鈕區 */}
+             <div className="flex gap-3">
+                <button 
+                  onClick={() => setShowSummaryReport(true)}
+                  className="flex-1 flex justify-center items-center gap-2 px-4 py-3 bg-gray-800 text-white rounded-xl hover:bg-black transition font-bold text-sm shadow-md"
+                >
+                  <PieChart className="w-4 h-4" /> 全區案件總表
+                </button>
                 <button 
                   onClick={createNewProject}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition font-bold text-xs"
+                  className="flex-1 flex justify-center items-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-bold text-sm shadow-md"
                 >
-                  <FolderPlus className="w-4 h-4" /> 快速建立
+                  <FolderPlus className="w-4 h-4" /> 建立新案件
                 </button>
+             </div>
+
+             <div className="mt-6 pt-4 border-t border-gray-50 text-center text-sm text-gray-400">
+                <span>目前共有 <span className="text-blue-600 font-black">{projects.length}</span> 筆案件資料</span>
              </div>
           </div>
 

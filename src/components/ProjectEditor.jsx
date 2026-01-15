@@ -7,29 +7,19 @@ import {
 import { CATEGORIES, PREDEFINED_SELLERS, toPing, createEmptyLandItem, exportMasterCSV } from '../utils/helpers';
 import LinkedLedger from './LinkedLedger';
 
-// ✅ 1. 強制資料清洗函式 (The Sanitizer)
-// 這會遞迴檢查所有資料，強制將 undefined 轉為 null，並確保陣列內沒有非法物件
+// ✅ 1. 強制資料清洗函式 (徹底解決 Firebase 儲存錯誤)
 const deepSanitize = (data) => {
-  // 如果是 undefined，強制轉為 null (Firestore 接受 null，不接受 undefined)
   if (data === undefined) return null;
-  
-  // 如果是 null, 字串, 數字, 布林值，直接回傳
   if (data === null || typeof data !== 'object') return data;
-
-  // 如果是陣列，遞迴處理每一個元素
-  if (Array.isArray(data)) {
-    return data.map(item => deepSanitize(item));
-  }
-
-  // 如果是物件，遞迴處理每一個值
+  if (Array.isArray(data)) return data.map(item => deepSanitize(item));
+  
   const sanitizedObj = {};
   Object.keys(data).forEach(key => {
     const value = data[key];
-    // 排除函式和 Symbol，確保只留資料
     if (typeof value !== 'function' && typeof value !== 'symbol') {
       sanitizedObj[key] = deepSanitize(value);
     } else {
-      sanitizedObj[key] = null; // 非法型別轉為 null
+      sanitizedObj[key] = null;
     }
   });
   return sanitizedObj;
@@ -110,66 +100,41 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     return { totalIncome, totalExpense, netProfit, roi, subTotals };
   }, [transactions]);
 
-  // --- ✅ 2. 自動儲存 (應用 deepSanitize) ---
+  // --- 自動儲存 ---
   useEffect(() => {
     if (!initialData) return;
+    
+    // ✅ 讓網頁標題同步專案名稱 (這樣匯出 PDF 時預設檔名就是專案名稱)
+    document.title = projectName || "專案報表";
+
     const timer = setTimeout(() => {
       const rawData = { 
         id: initialData.id, 
         name: projectName, 
-        buyers, 
-        lands, 
-        buildings, 
-        transactions, 
-        handoverData, 
+        buyers, lands, buildings, transactions, handoverData, 
         updatedAt: new Date().toISOString() 
       };
-      
-      // ✅ 關鍵修復：儲存前強制清洗資料
+      // 強制清洗資料
       const cleanData = deepSanitize(rawData);
       onSave(cleanData);
-      
     }, 1500);
     return () => clearTimeout(timer);
   }, [projectName, buyers, lands, buildings, transactions, handoverData]);
 
   // --- 圖片處理 ---
   const handleImageUploadGeneric = (file, callback) => {
-    if (file) { 
-        const reader = new FileReader(); 
-        reader.onloadend = () => callback(reader.result); 
-        reader.readAsDataURL(file); 
-    }
+    if (file) { const reader = new FileReader(); reader.onloadend = () => callback(reader.result); reader.readAsDataURL(file); }
   };
-
   const handleImageUpload = (e) => { 
     const file = e.target.files[0]; 
-    if (file) { 
-        const reader = new FileReader(); 
-        reader.onloadend = () => setNewTx({ ...newTx, image: reader.result }); 
-        reader.readAsDataURL(file); 
-    } 
+    if (file) { const reader = new FileReader(); reader.onloadend = () => setNewTx({ ...newTx, image: reader.result }); reader.readAsDataURL(file); } 
   };
 
-  // --- 土地操作函式 ---
-  const addLandSeller = () => { 
-    if (!tempLandSeller.name) return; 
-    setTempLand({ ...tempLand, sellers: [...tempLand.sellers, { id: Date.now(), ...tempLandSeller }] }); 
-    setTempLandSeller({ name: "", phone: "", address: "" }); 
-  };
-  
-  const removeLandSeller = (id) => { 
-    setTempLand({ ...tempLand, sellers: tempLand.sellers.filter(s => s.id !== id) }); 
-  };
-
-  const addLandItemField = () => { 
-    setTempLand({ ...tempLand, items: [...tempLand.items, createEmptyLandItem()] }); 
-  };
-
-  const removeLandItemField = (idx) => { 
-    const newItems = tempLand.items.filter((_, i) => i !== idx); 
-    setTempLand({ ...tempLand, items: newItems.length > 0 ? newItems : [createEmptyLandItem()] }); 
-  };
+  // --- 操作函式 ---
+  const addLandSeller = () => { if (!tempLandSeller.name) return; setTempLand({ ...tempLand, sellers: [...tempLand.sellers, { id: Date.now(), ...tempLandSeller }] }); setTempLandSeller({ name: "", phone: "", address: "" }); };
+  const removeLandSeller = (id) => { setTempLand({ ...tempLand, sellers: tempLand.sellers.filter(s => s.id !== id) }); };
+  const addLandItemField = () => { setTempLand({ ...tempLand, items: [...tempLand.items, createEmptyLandItem()] }); };
+  const removeLandItemField = (idx) => { const newItems = tempLand.items.filter((_, i) => i !== idx); setTempLand({ ...tempLand, items: newItems.length > 0 ? newItems : [createEmptyLandItem()] }); };
   
   const handleLandItemChange = (idx, field, value) => {
     const newItems = [...tempLand.items];
@@ -193,31 +158,16 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
       const hM2 = Number(item.areaM2) * (Number(item.shareNum) / Number(item.shareDenom));
       totalM2 += hM2; totalPingSum += toPing(hM2); totalPriceSum += (Number(item.subtotal) || 0);
     });
-    // 確保小數點 3 位
     const landData = { ...tempLand, holdingAreaM2: totalM2.toFixed(3), holdingAreaPing: totalPingSum.toFixed(3), totalPrice: totalPriceSum };
     if (editingLandId) setLands(lands.map(l => l.id === editingLandId ? { ...landData, id: l.id } : l));
     else setLands([...lands, { ...landData, id: Date.now() }]);
     setTempLand({ section: "", items: [createEmptyLandItem()], sellers: [] }); setShowLandForm(false); setEditingLandId(null);
   };
 
-  // --- 其他操作函式 ---
-  const saveBuyer = () => { 
-    if (!newBuyer.name) return; 
-    if (editingBuyerId) setBuyers(buyers.map(b => b.id === editingBuyerId ? { ...b, ...newBuyer } : b)); 
-    else setBuyers([...buyers, { id: Date.now(), ...newBuyer }]); 
-    setEditingBuyerId(null); setNewBuyer({ name: "", phone: "", address: "", image: null }); 
-  };
-
-  const addBuildingSeller = () => { 
-    if (!tempBuildingSeller.name) return; 
-    setTempBuilding({ ...tempBuilding, sellers: [...tempBuilding.sellers, { id: Date.now(), ...tempBuildingSeller }] }); 
-    setTempBuildingSeller({ name: "", phone: "", address: "" }); 
-  };
-
-  const removeBuildingSeller = (id) => { 
-    setTempBuilding({ ...tempBuilding, sellers: tempBuilding.sellers.filter(s => s.id !== id) }); 
-  };
-
+  const saveBuyer = () => { if (!newBuyer.name) return; if (editingBuyerId) setBuyers(buyers.map(b => b.id === editingBuyerId ? { ...b, ...newBuyer } : b)); else setBuyers([...buyers, { id: Date.now(), ...newBuyer }]); setEditingBuyerId(null); setNewBuyer({ name: "", phone: "", address: "", image: null }); };
+  const addBuildingSeller = () => { if (!tempBuildingSeller.name) return; setTempBuilding({ ...tempBuilding, sellers: [...tempBuilding.sellers, { id: Date.now(), ...tempBuildingSeller }] }); setTempBuildingSeller({ name: "", phone: "", address: "" }); };
+  const removeBuildingSeller = (id) => { setTempBuilding({ ...tempBuilding, sellers: tempBuilding.sellers.filter(s => s.id !== id) }); };
+  
   const saveBuilding = () => {
     if(!tempBuilding.address) return alert("請輸入門牌地址");
     if (editingBuildingId) setBuildings(buildings.map(b => b.id === editingBuildingId ? { ...tempBuilding, id: b.id } : b));
@@ -234,7 +184,6 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     setEditingTxId(null);
   };
 
-  // --- 匯出與列印 ---
   const handleExport = () => exportMasterCSV(projectName, buyers, lands, buildings, transactions, handoverData);
   const handlePrint = () => window.print();
 
@@ -504,8 +453,10 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" className="w-5 h-5 accent-green-600" checked={handoverData.drawings} onChange={(e)=>setHandoverData({...handoverData, drawings: e.target.checked})} /><span className="font-bold text-gray-700">廠房竣工圖 (一份)</span></label>
                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" className="w-5 h-5 accent-green-600" checked={handoverData.originalPermit} onChange={(e)=>setHandoverData({...handoverData, originalPermit: e.target.checked})} /><span className="font-bold text-gray-700">使用執照正本 (一份)</span></label>
                    <div className="grid grid-cols-2 gap-4 mt-4">
-                      <div><label className="font-bold text-gray-700 block mb-1">電單度數</label><div className="flex items-center gap-2"><span className="text-xl font-black text-gray-300">【</span><input type="number" className="w-full text-center border-b-2 border-gray-300 focus:border-green-500 outline-none text-xl font-mono" value={handoverData.electricityBill} onChange={(e)=>setHandoverData({...handoverData, electricityBill: e.target.value})} /><span className="text-xl font-black text-gray-300">】</span></div></div>
-                      <div><label className="font-bold text-gray-700 block mb-1">水單度數</label><div className="flex items-center gap-2"><span className="text-xl font-black text-gray-300">【</span><input type="number" className="w-full text-center border-b-2 border-gray-300 focus:border-blue-500 outline-none text-xl font-mono" value={handoverData.waterBill} onChange={(e)=>setHandoverData({...handoverData, waterBill: e.target.value})} /><span className="text-xl font-black text-gray-300">】</span></div></div>
+                      {/* ✅ 修正名稱：電單號碼 */}
+                      <div><label className="font-bold text-gray-700 block mb-1">電單號碼</label><div className="flex items-center gap-2"><span className="text-xl font-black text-gray-300">【</span><input type="text" className="w-full text-center border-b-2 border-gray-300 focus:border-green-500 outline-none text-xl font-mono" value={handoverData.electricityBill} onChange={(e)=>setHandoverData({...handoverData, electricityBill: e.target.value})} /><span className="text-xl font-black text-gray-300">】</span></div></div>
+                      {/* ✅ 修正名稱：水單號碼 */}
+                      <div><label className="font-bold text-gray-700 block mb-1">水單號碼</label><div className="flex items-center gap-2"><span className="text-xl font-black text-gray-300">【</span><input type="text" className="w-full text-center border-b-2 border-gray-300 focus:border-blue-500 outline-none text-xl font-mono" value={handoverData.waterBill} onChange={(e)=>setHandoverData({...handoverData, waterBill: e.target.value})} /><span className="text-xl font-black text-gray-300">】</span></div></div>
                    </div>
                 </div>
              </div>
@@ -559,22 +510,32 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
         )}
       </div>
 
-      {/* 列印報表 (隱藏區) */}
+      {/* 列印報表 (隱藏區 - ✅ 更新：加入全案土地總結算 & 修正名稱) */}
       <div className="hidden print:block print:p-8">
         <h1 className="text-2xl font-bold mb-2">專案管理報表: {projectName}</h1>
         <p className="text-sm text-gray-500 mb-8">列印日期: {new Date().toLocaleDateString()}</p>
         
+        {/* ✅ 新增：全案土地總結算 (Print View) */}
+        <section className="mb-8 break-inside-avoid">
+            <h2 className="text-lg font-bold border-b pb-2 mb-4">全案土地總結算</h2>
+            <div className="grid grid-cols-3 gap-4 border p-4 text-center">
+                <div><span className="block text-xs text-gray-500 font-bold">總面積 (㎡)</span><span className="text-xl font-black">{landGrandTotal.m2}</span></div>
+                <div><span className="block text-xs text-gray-500 font-bold">總坪數</span><span className="text-xl font-black">{landGrandTotal.ping}</span></div>
+                <div><span className="block text-xs text-gray-500 font-bold">總金額 ($)</span><span className="text-xl font-black">${Number(landGrandTotal.price).toLocaleString()}</span></div>
+            </div>
+        </section>
+
         {/* 1. 買受人 */}
         <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">一、買受人資訊</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">姓名</th><th className="border p-2">電話</th><th className="border p-2">地址</th></tr></thead><tbody>{buyers.map(b => (<tr key={b.id}><td className="border p-2">{b.name}</td><td className="border p-2">{b.phone}</td><td className="border p-2">{b.address}</td></tr>))}</tbody></table></section>
         
-        {/* 2. 土地 */}
-        <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">二、土地標的</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">出售人</th><th className="border p-2">地段</th><th className="border p-2">地號</th><th className="border p-2">面積(m2)</th><th className="border p-2">總金額</th></tr></thead><tbody>{lands.map(l => (<tr key={l.id}><td className="border p-2">{l.sellers.map(s => s.name).join(', ')}</td><td className="border p-2">{l.section}</td><td className="border p-2 text-xs">{l.items.map(i => i.lotNumber).join(', ').substring(0, 50)}</td><td className="border p-2">{Number(l.holdingAreaM2).toFixed(3)}</td><td className="border p-2">${Number(l.totalPrice).toLocaleString()}</td></tr>))}</tbody></table></section>
+        {/* 2. 土地 (✅ 修正：加入坪數欄位) */}
+        <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">二、土地標的</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">出售人</th><th className="border p-2">地段</th><th className="border p-2">地號</th><th className="border p-2">面積(m2)</th><th className="border p-2">坪數</th><th className="border p-2">總金額</th></tr></thead><tbody>{lands.map(l => (<tr key={l.id}><td className="border p-2">{l.sellers.map(s => s.name).join(', ')}</td><td className="border p-2">{l.section}</td><td className="border p-2 text-xs">{l.items.map(i => i.lotNumber).join(', ').substring(0, 50)}</td><td className="border p-2">{Number(l.holdingAreaM2).toFixed(3)}</td><td className="border p-2">{Number(l.holdingAreaPing).toFixed(3)}</td><td className="border p-2">${Number(l.totalPrice).toLocaleString()}</td></tr>))}</tbody></table></section>
         
         {/* 3. 建物 */}
         <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">三、建物標的</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">建照</th><th className="border p-2">地址</th><th className="border p-2">建號</th><th className="border p-2">面積(m2)</th><th className="border p-2">總金額</th></tr></thead><tbody>{buildings.map(b => (<tr key={b.id}><td className="border p-2">{b.permitNumber}</td><td className="border p-2">{b.address}</td><td className="border p-2">{b.buildNumber}</td><td className="border p-2">{b.areaM2}</td><td className="border p-2">${Number(b.totalPrice).toLocaleString()}</td></tr>))}</tbody></table></section>
         
-        {/* 4. 交屋 */}
-        {handoverData && (<section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">四、交屋點交確認</h2><div className="grid grid-cols-2 gap-2 text-sm border p-4"><div>遙控器: {handoverData.remotes}</div><div>小門鑰匙(前): {handoverData.keysFront}</div><div>小門鑰匙(後): {handoverData.keysBack}</div><div>保固書: {handoverData.warranty?"有":"無"}</div><div>竣工圖: {handoverData.drawings?"有":"無"}</div><div>使照正本: {handoverData.originalPermit?"有":"無"}</div><div>電單: {handoverData.electricityBill}</div><div>水單: {handoverData.waterBill}</div></div></section>)}
+        {/* 4. 交屋 (✅ 修正：電單/水單號碼) */}
+        {handoverData && (<section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">四、交屋點交確認</h2><div className="grid grid-cols-2 gap-2 text-sm border p-4"><div>遙控器: {handoverData.remotes}</div><div>小門鑰匙(前): {handoverData.keysFront}</div><div>小門鑰匙(後): {handoverData.keysBack}</div><div>保固書: {handoverData.warranty?"有":"無"}</div><div>竣工圖: {handoverData.drawings?"有":"無"}</div><div>使照正本: {handoverData.originalPermit?"有":"無"}</div><div>電單號碼: {handoverData.electricityBill}</div><div>水單號碼: {handoverData.waterBill}</div></div></section>)}
         
         {/* 5. 財務 */}
         <section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">五、財務摘要</h2><div className="flex gap-8 mb-4"><div>總收入: ${stats.totalIncome.toLocaleString()}</div><div>總支出: ${stats.totalExpense.toLocaleString()}</div><div>淨利: ${stats.netProfit.toLocaleString()}</div></div></section>
