@@ -2,12 +2,12 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, Trash2, DollarSign, Image as ImageIcon, FileSpreadsheet, Printer, X, 
   Users, Map, Home, Edit2, Save, ArrowLeft, Check, Camera, 
-  Calculator, Minus, Link as LinkIcon, ClipboardCheck, Key, FileText
+  Calculator, Minus, Link as LinkIcon, ClipboardCheck, Key, FileText, Calendar as CalendarIcon
 } from 'lucide-react';
 import { CATEGORIES, PREDEFINED_SELLERS, toPing, createEmptyLandItem, exportMasterCSV } from '../utils/helpers';
 import LinkedLedger from './LinkedLedger';
 
-// ✅ 1. 強制資料清洗函式 (徹底解決 Firebase 儲存錯誤)
+// ✅ 強制資料清洗
 const deepSanitize = (data) => {
   if (data === undefined) return null;
   if (data === null || typeof data !== 'object') return data;
@@ -69,8 +69,9 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
   const [editingTxId, setEditingTxId] = useState(null);
   const [previewImage, setPreviewImage] = useState(null);
 
-  // 6. 交屋點交確認資料
+  // 6. 交屋點交確認資料 (✅ 新增 handoverDate)
   const defaultHandover = {
+    handoverDate: "", // 新增日期
     remotes: "0", keysFront: "0", keysBack: "0", warranty: false, drawings: false, electricityBill: "", waterBill: "", originalPermit: false
   };
   const [handoverData, setHandoverData] = useState({ ...defaultHandover, ...(initialData.handoverData || {}) });
@@ -100,11 +101,11 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     return { totalIncome, totalExpense, netProfit, roi, subTotals };
   }, [transactions]);
 
-  // --- 自動儲存 ---
+  // --- 自動儲存 與 ✅ PDF 檔名設定 ---
   useEffect(() => {
     if (!initialData) return;
     
-    // ✅ 讓網頁標題同步專案名稱 (這樣匯出 PDF 時預設檔名就是專案名稱)
+    // 設定瀏覽器標題 = PDF 預設檔名
     document.title = projectName || "專案報表";
 
     const timer = setTimeout(() => {
@@ -199,11 +200,16 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
             <button onClick={onBack} className="p-2 hover:bg-gray-200 rounded-full transition"><ArrowLeft className="w-6 h-6 text-gray-600" /></button>
             <div>
               <div className="text-sm text-gray-500 font-medium uppercase tracking-widest decoration-blue-500 underline underline-offset-4">專案管理工作區</div>
+              
+              {/* ✅ 修改：這裡的輸入框直接決定 PDF 檔名 */}
               <div className="flex items-center gap-2 mt-1">
                 {isEditingName ? (
                   <div className="flex items-center gap-2"><input type="text" value={projectName} onChange={(e) => setProjectName(e.target.value)} className="text-3xl font-bold text-gray-800 border-b-2 border-blue-500 focus:outline-none bg-transparent" autoFocus /><button onClick={() => setIsEditingName(false)} className="text-green-600"><Save className="w-6 h-6" /></button></div>
                 ) : (
-                  <div className="flex items-center gap-2 group"><h1 className="text-3xl font-bold text-gray-800">{projectName}</h1><button onClick={() => setIsEditingName(true)} className="text-gray-400 hover:text-blue-600 transition"><Edit2 className="w-5 h-5" /></button></div>
+                  <div className="flex items-center gap-2 group">
+                    <h1 className="text-3xl font-bold text-gray-800" title="點擊修改名稱 (即 PDF 檔名)">{projectName}</h1>
+                    <button onClick={() => setIsEditingName(true)} className="text-gray-400 hover:text-blue-600 transition"><Edit2 className="w-5 h-5" /></button>
+                  </div>
                 )}
               </div>
             </div>
@@ -222,7 +228,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
           ))}
         </div>
 
-        {/* 1. 買受人 Tab */}
+        {/* 1. 買受人 Tab (略，保持不變) */}
         {activeTab === 'project' && (
           <div className="bg-white rounded-2xl shadow-sm border p-8 animate-fadeIn">
             <h2 className="font-bold text-gray-700 mb-6 flex items-center gap-2 border-l-4 border-blue-500 pl-4 uppercase tracking-wider text-lg">買受人資訊管理</h2>
@@ -260,7 +266,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
           </div>
         )}
 
-        {/* 2. 土地 Tab */}
+        {/* 2. 土地 Tab (略，保持不變) */}
         {activeTab === 'land' && (
            <div className="space-y-6 animate-fadeIn">
               <div className="bg-gradient-to-r from-blue-600 to-blue-800 p-6 rounded-3xl text-white shadow-xl mb-6">
@@ -345,7 +351,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
            </div>
         )}
 
-        {/* 3. 建物 Tab */}
+        {/* 3. 建物 Tab (略，保持不變) */}
         {activeTab === 'building' && (
            <div className="space-y-6 animate-fadeIn">
               {!showBuildingForm && <button onClick={() => { setEditingBuildingId(null); setTempBuilding({ permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null }); setShowBuildingForm(true); }} className="w-full py-6 border-2 border-dashed rounded-2xl text-gray-400 hover:border-orange-500 hover:text-orange-500 flex justify-center items-center gap-2 transition bg-white shadow-sm text-lg font-bold"><Plus className="w-6 h-6" /> 新增建物案場資料</button>}
@@ -423,6 +429,18 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
           <div className="bg-white rounded-2xl shadow-sm border p-8 animate-fadeIn">
              <div className="border-b pb-6 mb-6">
                 <h2 className="text-xl font-black text-gray-800 mb-4 flex items-center gap-2"><ClipboardCheck className="w-6 h-6 text-green-600"/> 交屋點交確認單</h2>
+                
+                {/* ✅ 新增：點交日期設定 */}
+                <div className="flex items-center gap-4 bg-yellow-50 p-4 rounded-xl border border-yellow-100 mb-6">
+                   <label className="font-bold text-yellow-800 flex items-center gap-2"><CalendarIcon className="w-5 h-5"/> 點交日期</label>
+                   <input 
+                      type="date" 
+                      className="p-2 border rounded-lg bg-white outline-none focus:ring-2 focus:ring-yellow-400"
+                      value={handoverData.handoverDate || ""} 
+                      onChange={(e)=>setHandoverData({...handoverData, handoverDate: e.target.value})}
+                   />
+                </div>
+
                 <div className="bg-gray-50 p-4 rounded-xl text-sm text-gray-600 space-y-2 font-mono">
                    <p><span className="font-bold text-gray-400">地籍地號：</span> {allLotNumbers || "無資料"}</p>
                    <p><span className="font-bold text-gray-400">建物資訊：</span> {allBuildingInfo || "無資料"}</p>
@@ -453,9 +471,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" className="w-5 h-5 accent-green-600" checked={handoverData.drawings} onChange={(e)=>setHandoverData({...handoverData, drawings: e.target.checked})} /><span className="font-bold text-gray-700">廠房竣工圖 (一份)</span></label>
                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50"><input type="checkbox" className="w-5 h-5 accent-green-600" checked={handoverData.originalPermit} onChange={(e)=>setHandoverData({...handoverData, originalPermit: e.target.checked})} /><span className="font-bold text-gray-700">使用執照正本 (一份)</span></label>
                    <div className="grid grid-cols-2 gap-4 mt-4">
-                      {/* ✅ 修正名稱：電單號碼 */}
                       <div><label className="font-bold text-gray-700 block mb-1">電單號碼</label><div className="flex items-center gap-2"><span className="text-xl font-black text-gray-300">【</span><input type="text" className="w-full text-center border-b-2 border-gray-300 focus:border-green-500 outline-none text-xl font-mono" value={handoverData.electricityBill} onChange={(e)=>setHandoverData({...handoverData, electricityBill: e.target.value})} /><span className="text-xl font-black text-gray-300">】</span></div></div>
-                      {/* ✅ 修正名稱：水單號碼 */}
                       <div><label className="font-bold text-gray-700 block mb-1">水單號碼</label><div className="flex items-center gap-2"><span className="text-xl font-black text-gray-300">【</span><input type="text" className="w-full text-center border-b-2 border-gray-300 focus:border-blue-500 outline-none text-xl font-mono" value={handoverData.waterBill} onChange={(e)=>setHandoverData({...handoverData, waterBill: e.target.value})} /><span className="text-xl font-black text-gray-300">】</span></div></div>
                    </div>
                 </div>
@@ -510,12 +526,12 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
         )}
       </div>
 
-      {/* 列印報表 (隱藏區 - ✅ 更新：加入全案土地總結算 & 修正名稱) */}
+      {/* 列印報表 (隱藏區) */}
       <div className="hidden print:block print:p-8">
         <h1 className="text-2xl font-bold mb-2">專案管理報表: {projectName}</h1>
         <p className="text-sm text-gray-500 mb-8">列印日期: {new Date().toLocaleDateString()}</p>
         
-        {/* ✅ 新增：全案土地總結算 (Print View) */}
+        {/* ✅ 全案土地總結算 (Print View) */}
         <section className="mb-8 break-inside-avoid">
             <h2 className="text-lg font-bold border-b pb-2 mb-4">全案土地總結算</h2>
             <div className="grid grid-cols-3 gap-4 border p-4 text-center">
@@ -534,8 +550,8 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
         {/* 3. 建物 */}
         <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">三、建物標的</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">建照</th><th className="border p-2">地址</th><th className="border p-2">建號</th><th className="border p-2">面積(m2)</th><th className="border p-2">總金額</th></tr></thead><tbody>{buildings.map(b => (<tr key={b.id}><td className="border p-2">{b.permitNumber}</td><td className="border p-2">{b.address}</td><td className="border p-2">{b.buildNumber}</td><td className="border p-2">{b.areaM2}</td><td className="border p-2">${Number(b.totalPrice).toLocaleString()}</td></tr>))}</tbody></table></section>
         
-        {/* 4. 交屋 (✅ 修正：電單/水單號碼) */}
-        {handoverData && (<section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">四、交屋點交確認</h2><div className="grid grid-cols-2 gap-2 text-sm border p-4"><div>遙控器: {handoverData.remotes}</div><div>小門鑰匙(前): {handoverData.keysFront}</div><div>小門鑰匙(後): {handoverData.keysBack}</div><div>保固書: {handoverData.warranty?"有":"無"}</div><div>竣工圖: {handoverData.drawings?"有":"無"}</div><div>使照正本: {handoverData.originalPermit?"有":"無"}</div><div>電單號碼: {handoverData.electricityBill}</div><div>水單號碼: {handoverData.waterBill}</div></div></section>)}
+        {/* 4. 交屋 */}
+        {handoverData && (<section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">四、交屋點交確認</h2><div className="grid grid-cols-2 gap-2 text-sm border p-4"><div>點交日期: {handoverData.handoverDate}</div><div>遙控器: {handoverData.remotes}</div><div>小門鑰匙(前): {handoverData.keysFront}</div><div>小門鑰匙(後): {handoverData.keysBack}</div><div>保固書: {handoverData.warranty?"有":"無"}</div><div>竣工圖: {handoverData.drawings?"有":"無"}</div><div>使照正本: {handoverData.originalPermit?"有":"無"}</div><div>電單號碼: {handoverData.electricityBill}</div><div>水單號碼: {handoverData.waterBill}</div></div></section>)}
         
         {/* 5. 財務 */}
         <section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">五、財務摘要</h2><div className="flex gap-8 mb-4"><div>總收入: ${stats.totalIncome.toLocaleString()}</div><div>總支出: ${stats.totalExpense.toLocaleString()}</div><div>淨利: ${stats.netProfit.toLocaleString()}</div></div></section>
