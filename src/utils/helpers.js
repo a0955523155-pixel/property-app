@@ -23,11 +23,21 @@ export const createEmptyLandItem = () => ({
   subtotal: "" 
 });
 
-// CSV 匯出邏輯 (✅ 已修正：加入點交日期)
-export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions, handoverData) => {
+// ✅ CSV 匯出邏輯 (新增：專案團隊資料)
+export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions, handoverData, projectTeam) => {
     let csvContent = "\uFEFF"; 
     csvContent += `=== 專案報表: ${projectName} ===\n`;
     csvContent += `匯出日期,${new Date().toLocaleString()}\n\n`;
+
+    // 0. ✅ 專案團隊資料
+    if (projectTeam) {
+      csvContent += "=== 專案團隊資訊 ===\n";
+      csvContent += `仲介公司,${projectTeam.agency || ''}\n`;
+      csvContent += `經紀人,${projectTeam.broker || ''}\n`;
+      csvContent += `開發業務,${projectTeam.developer || ''}\n`;
+      csvContent += `行銷業務,${projectTeam.marketer || ''}\n`;
+      csvContent += `承辦代書,${projectTeam.scrivener || ''}\n\n`;
+    }
 
     // 1. 買受人資料
     csvContent += "=== 買受人資訊 ===\n";
@@ -50,7 +60,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 3. 建物資料
+    // 3. 建物資料 (✅ 出售人已在第一欄)
     csvContent += "=== 建物標的清單 ===\n";
     csvContent += "出售人/屋主,建照號碼,門牌地址,使照號碼,建號,面積(m2),單價(元/坪),成交總額($)\n";
     buildings.forEach(b => {
@@ -61,7 +71,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
 
     // 4. 財務收支
     csvContent += "=== 財務收支明細 ===\n";
-    csvContent += "日期,類型,科目,歸屬,具體對象,金額,備註\n";
+    csvContent += "日期,類型,科目,歸屬,具體對象(出售人/屋主),金額,備註\n";
     transactions.forEach(t => {
         let linkedLabel = "一般專案收支";
         if(t.linkedType === 'land') { const land = lands.find(l=>l.id===t.linkedId); linkedLabel = land ? (land.sellers.map(s=>s.name).join('/') || land.items[0]?.lotNumber) : '未知土地'; } 
@@ -71,7 +81,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 5. ✅ 交屋點交確認單 (新增日期)
+    // 5. 交屋點交確認單
     if (handoverData) {
       csvContent += "=== 交屋點交確認單 ===\n";
       csvContent += `點交日期,${handoverData.handoverDate || ''}\n`;

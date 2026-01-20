@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Plus, Trash2, DollarSign, Image as ImageIcon, FileSpreadsheet, Printer, X, 
   Users, Map, Home, Edit2, Save, ArrowLeft, Check, Camera, 
-  Calculator, Minus, Link as LinkIcon, ClipboardCheck, Key, FileText, Calendar as CalendarIcon, Tag, Building2, Settings
+  Calculator, Minus, Link as LinkIcon, ClipboardCheck, Key, FileText, Calendar as CalendarIcon, Tag, Building2, Settings, Briefcase
 } from 'lucide-react';
 import { CATEGORIES, PREDEFINED_SELLERS, toPing, createEmptyLandItem, exportMasterCSV } from '../utils/helpers';
 import LinkedLedger from './LinkedLedger';
@@ -22,17 +22,22 @@ const deepSanitize = (data) => {
 const ProjectEditor = ({ initialData, onSave, onBack }) => {
   if (!initialData) return null;
 
-  const [activeTab, setActiveTab] = useState('project');
+  const [activeTab, setActiveTab] = useState('team'); // 預設改為團隊或保持 project
   
-  // 1. 專案基本狀態 (✅ 新增 site 案場名稱)
+  // 1. 專案基本狀態
   const [projectName, setProjectName] = useState(initialData.name || "新案件名稱");
   const [projectZone, setProjectZone] = useState(initialData.zone || "未分類"); 
-  const [projectSite, setProjectSite] = useState(initialData.site || "大成工業城"); // 預設大案場
+  const [projectSite, setProjectSite] = useState(initialData.site || "大成工業城");
   const [isEditingName, setIsEditingName] = useState(false);
 
-  // ✅ 列印選項狀態 (控制 PDF 匯出哪些區塊)
+  // ✅ 新增：專案團隊資料 (仲介、代書等)
+  const [projectTeam, setProjectTeam] = useState(initialData.projectTeam || {
+    agency: "", broker: "", developer: "", marketer: "", scrivener: ""
+  });
+
+  // 列印選項
   const [printConfig, setPrintConfig] = useState({
-    buyers: true, lands: true, buildings: true, handover: true, finance: true
+    team: true, buyers: true, lands: true, buildings: true, handover: true, finance: true
   });
   const [showPrintSettings, setShowPrintSettings] = useState(false);
 
@@ -97,28 +102,27 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
     return { totalIncome, totalExpense, netProfit, roi, subTotals };
   }, [transactions]);
 
-  // --- 自動儲存 (✅ 包含 site) ---
+  // --- 自動儲存 ---
   useEffect(() => {
     if (!initialData) return;
     document.title = projectName || "專案報表";
     const timer = setTimeout(() => {
       const rawData = { 
         id: initialData.id, 
-        name: projectName, 
-        zone: projectZone, 
-        site: projectSite, // 儲存案場名稱
+        name: projectName, zone: projectZone, site: projectSite, 
+        projectTeam, // ✅ 儲存團隊資料
         buyers, lands, buildings, transactions, handoverData, 
         updatedAt: new Date().toISOString() 
       };
       onSave(deepSanitize(rawData));
     }, 1500);
     return () => clearTimeout(timer);
-  }, [projectName, projectZone, projectSite, buyers, lands, buildings, transactions, handoverData]);
+  }, [projectName, projectZone, projectSite, projectTeam, buyers, lands, buildings, transactions, handoverData]);
 
   const handleImageUploadGeneric = (file, callback) => { if (file) { const reader = new FileReader(); reader.onloadend = () => callback(reader.result); reader.readAsDataURL(file); } };
   const handleImageUpload = (e) => { const file = e.target.files[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => setNewTx({ ...newTx, image: reader.result }); reader.readAsDataURL(file); } };
 
-  // --- CRUD (省略重複部分，保持原樣) ---
+  // --- CRUD 函式 (略，保持原樣) ---
   const addLandSeller = () => { if (!tempLandSeller.name) return; setTempLand({ ...tempLand, sellers: [...tempLand.sellers, { id: Date.now(), ...tempLandSeller }] }); setTempLandSeller({ name: "", phone: "", address: "" }); };
   const removeLandSeller = (id) => { setTempLand({ ...tempLand, sellers: tempLand.sellers.filter(s => s.id !== id) }); };
   const addLandItemField = () => { setTempLand({ ...tempLand, items: [...tempLand.items, createEmptyLandItem()] }); };
@@ -144,7 +148,9 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
   const removeBuildingSeller = (id) => { setTempBuilding({ ...tempBuilding, sellers: tempBuilding.sellers.filter(s => s.id !== id) }); };
   const saveBuilding = () => { if(!tempBuilding.address) return alert("請輸入門牌地址"); if (editingBuildingId) setBuildings(buildings.map(b => b.id === editingBuildingId ? { ...tempBuilding, id: b.id } : b)); else setBuildings([...buildings, { ...tempBuilding, id: Date.now() }]); setTempBuilding({ permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null }); setShowBuildingForm(false); setEditingBuildingId(null); };
   const saveTransaction = (e) => { if(e) e.preventDefault(); if (!newTx.amount) return; if (editingTxId) setTransactions(transactions.map(t => t.id === editingTxId ? { ...newTx, id: t.id, amount: Number(newTx.amount) } : t)); else setTransactions([...transactions, { ...newTx, id: Date.now(), amount: Number(newTx.amount) }]); setNewTx({ date: new Date().toISOString().split('T')[0], type: 'expense', category: CATEGORIES.expense[0], amount: '', note: '', image: null, linkedId: null, linkedType: 'general' }); setEditingTxId(null); };
-  const handleExport = () => exportMasterCSV(projectName, buyers, lands, buildings, transactions, handoverData);
+  
+  // ✅ 匯出時加入 projectTeam
+  const handleExport = () => exportMasterCSV(projectName, buyers, lands, buildings, transactions, handoverData, projectTeam);
   const handlePrint = () => window.print();
 
   const allLotNumbers = lands.map(l => `${l.section} (${l.items.map(i=>i.lotNumber).join(',')})`).join('; ');
@@ -153,6 +159,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
   return (
     <div className="animate-fadeIn pb-24 text-base app-wrapper">
       <div className="print:hidden">
+        {/* Top Bar */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 border-b pb-6">
           <div className="flex items-center gap-4">
             <button onClick={onBack} className="p-2 hover:bg-gray-200 rounded-full transition"><ArrowLeft className="w-6 h-6 text-gray-600" /></button>
@@ -164,40 +171,28 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                 ) : (
                   <div className="flex items-center gap-2 group"><h1 className="text-3xl font-bold text-gray-800" title="點擊修改名稱">{projectName}</h1><button onClick={() => setIsEditingName(true)} className="text-gray-400 hover:text-blue-600 transition"><Edit2 className="w-5 h-5" /></button></div>
                 )}
-                
-                {/* ✅ 案場與區域設定 */}
                 <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-lg border border-gray-200">
-                   <Building2 className="w-4 h-4 text-gray-500 ml-1" />
-                   <input 
-                     className="bg-transparent text-sm font-bold text-gray-700 outline-none w-28 placeholder-gray-400"
-                     placeholder="輸入案場名稱"
-                     value={projectSite}
-                     onChange={(e) => setProjectSite(e.target.value)}
-                     title="所屬大案場名稱 (如：大成工業城)"
-                   />
+                   <Building2 className="w-4 h-4 text-gray-500 ml-1" /><input className="bg-transparent text-sm font-bold text-gray-700 outline-none w-28 placeholder-gray-400" placeholder="輸入案場名稱" value={projectSite} onChange={(e) => setProjectSite(e.target.value)} />
                    <div className="w-px h-4 bg-gray-300 mx-1"></div>
-                   <Tag className="w-4 h-4 text-gray-500" />
-                   <select className="bg-transparent text-sm font-bold text-gray-600 outline-none cursor-pointer" value={projectZone} onChange={(e) => setProjectZone(e.target.value)}>
-                     <option value="未分類">未分類區域</option><option value="A區">A區</option><option value="B區">B區</option><option value="C區">C區</option><option value="D區">D區</option><option value="E區">E區</option>
-                   </select>
+                   <Tag className="w-4 h-4 text-gray-500" /><select className="bg-transparent text-sm font-bold text-gray-600 outline-none cursor-pointer" value={projectZone} onChange={(e) => setProjectZone(e.target.value)}><option value="未分類">未分類</option><option value="A區">A區</option><option value="B區">B區</option><option value="C區">C區</option><option value="D區">D區</option><option value="E區">E區</option></select>
                 </div>
               </div>
             </div>
           </div>
           <div className="flex gap-3">
-            {/* ✅ 列印設定按鈕 */}
             <div className="relative">
               <button onClick={() => setShowPrintSettings(!showPrintSettings)} className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm shadow-sm transition font-bold"><Settings className="w-5 h-5" /> 匯出設定</button>
               {showPrintSettings && (
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 p-4 z-50 animate-fadeIn">
                   <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">勾選要匯出的項目</h4>
                   <div className="space-y-2">
-                    {Object.keys(printConfig).map(key => (
-                      <label key={key} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 accent-blue-600" checked={printConfig[key]} onChange={(e) => setPrintConfig({...printConfig, [key]: e.target.checked})} />
-                        <span className="text-sm font-bold text-gray-700 capitalize">{key === 'handover' ? '點交單' : key === 'lands' ? '土地清單' : key === 'buildings' ? '建物清單' : key === 'buyers' ? '買受人' : '財務報表'}</span>
-                      </label>
-                    ))}
+                    {/* ✅ 加入 Team 選項 */}
+                    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-blue-600" checked={printConfig.team} onChange={(e) => setPrintConfig({...printConfig, team: e.target.checked})} /><span className="text-sm font-bold text-gray-700">專案團隊</span></label>
+                    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-blue-600" checked={printConfig.buyers} onChange={(e) => setPrintConfig({...printConfig, buyers: e.target.checked})} /><span className="text-sm font-bold text-gray-700">買受人</span></label>
+                    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-blue-600" checked={printConfig.lands} onChange={(e) => setPrintConfig({...printConfig, lands: e.target.checked})} /><span className="text-sm font-bold text-gray-700">土地清單</span></label>
+                    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-blue-600" checked={printConfig.buildings} onChange={(e) => setPrintConfig({...printConfig, buildings: e.target.checked})} /><span className="text-sm font-bold text-gray-700">建物清單</span></label>
+                    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-blue-600" checked={printConfig.handover} onChange={(e) => setPrintConfig({...printConfig, handover: e.target.checked})} /><span className="text-sm font-bold text-gray-700">點交單</span></label>
+                    <label className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-blue-600" checked={printConfig.finance} onChange={(e) => setPrintConfig({...printConfig, finance: e.target.checked})} /><span className="text-sm font-bold text-gray-700">財務報表</span></label>
                   </div>
                 </div>
               )}
@@ -207,18 +202,34 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
           </div>
         </div>
 
+        {/* Tabs */}
         <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar">
-          {[{ id: 'project', icon: Users, label: '買受人資訊' }, { id: 'land', icon: Map, label: '土地標格資訊' }, { id: 'building', icon: Home, label: '建物標格資訊' }, { id: 'handover', icon: ClipboardCheck, label: '交屋點交確認' }, { id: 'finance', icon: DollarSign, label: '財務收支帳' }].map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all duration-200 text-sm ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border'}`}>
-              <tab.icon className="w-5 h-5" /> {tab.label}
-            </button>
-          ))}
+          {/* ✅ 新增：專案團隊 Tab */}
+          <button onClick={() => setActiveTab('team')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all duration-200 text-sm ${activeTab === 'team' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border'}`}><Briefcase className="w-5 h-5" /> 專案團隊</button>
+          <button onClick={() => setActiveTab('project')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all duration-200 text-sm ${activeTab === 'project' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border'}`}><Users className="w-5 h-5" /> 買受人資訊</button>
+          <button onClick={() => setActiveTab('land')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all duration-200 text-sm ${activeTab === 'land' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border'}`}><Map className="w-5 h-5" /> 土地標格</button>
+          <button onClick={() => setActiveTab('building')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all duration-200 text-sm ${activeTab === 'building' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border'}`}><Home className="w-5 h-5" /> 建物標格</button>
+          <button onClick={() => setActiveTab('handover')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all duration-200 text-sm ${activeTab === 'handover' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border'}`}><ClipboardCheck className="w-5 h-5" /> 交屋點交</button>
+          <button onClick={() => setActiveTab('finance')} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all duration-200 text-sm ${activeTab === 'finance' ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-gray-600 hover:bg-gray-100 border'}`}><DollarSign className="w-5 h-5" /> 財務收支</button>
         </div>
 
-        {/* 1. 買受人 Tab */}
+        {/* 0. 專案團隊 Tab (✅ 新增) */}
+        {activeTab === 'team' && (
+          <div className="bg-white rounded-2xl shadow-sm border p-8 animate-fadeIn">
+             <h2 className="font-bold text-gray-700 mb-6 flex items-center gap-2 border-l-4 border-blue-500 pl-4 uppercase tracking-wider text-lg">專案團隊資訊 (Project Team)</h2>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div><label className="text-sm text-gray-500 block mb-2 font-bold">仲介公司</label><input className="w-full p-3 border rounded-lg text-base" value={projectTeam.agency} onChange={e=>setProjectTeam({...projectTeam, agency:e.target.value})} placeholder="例如：信義房屋" /></div>
+                <div><label className="text-sm text-gray-500 block mb-2 font-bold">經紀人</label><input className="w-full p-3 border rounded-lg text-base" value={projectTeam.broker} onChange={e=>setProjectTeam({...projectTeam, broker:e.target.value})} placeholder="經紀人姓名" /></div>
+                <div><label className="text-sm text-gray-500 block mb-2 font-bold">開發業務 (公司所有人名)</label><input className="w-full p-3 border rounded-lg text-base" value={projectTeam.developer} onChange={e=>setProjectTeam({...projectTeam, developer:e.target.value})} placeholder="開發人員姓名" /></div>
+                <div><label className="text-sm text-gray-500 block mb-2 font-bold">行銷業務 (公司所有人名)</label><input className="w-full p-3 border rounded-lg text-base" value={projectTeam.marketer} onChange={e=>setProjectTeam({...projectTeam, marketer:e.target.value})} placeholder="行銷人員姓名" /></div>
+                <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">承辦代書</label><input className="w-full p-3 border rounded-lg text-base" value={projectTeam.scrivener} onChange={e=>setProjectTeam({...projectTeam, scrivener:e.target.value})} placeholder="代書姓名/事務所" /></div>
+             </div>
+          </div>
+        )}
+
+        {/* 1. 買受人 Tab (略) */}
         {activeTab === 'project' && (
           <div className="bg-white rounded-2xl shadow-sm border p-8 animate-fadeIn">
-            {/* Form & List (略 - 保持原樣) */}
             <h2 className="font-bold text-gray-700 mb-6 flex items-center gap-2 border-l-4 border-blue-500 pl-4 uppercase tracking-wider text-lg">買受人資訊管理</h2>
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end mb-8 bg-gray-50 p-6 rounded-xl border border-gray-100">
               <input type="text" placeholder="姓名" className="w-full p-3 border rounded-lg text-base" value={newBuyer.name} onChange={e => setNewBuyer({...newBuyer, name: e.target.value})} />
@@ -245,7 +256,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
               {!showLandForm && <button onClick={() => { setEditingLandId(null); setTempLand({ section: "", items: [createEmptyLandItem()], sellers: [] }); setShowLandForm(true); }} className="w-full py-6 border-2 border-dashed rounded-2xl text-gray-400 hover:border-blue-500 hover:text-blue-500 flex justify-center items-center gap-2 transition bg-white shadow-sm text-lg font-bold"><Plus className="w-6 h-6" /> 錄入土地標的資訊 (多筆錄入)</button>}
               {showLandForm && (
                 <div className="bg-white p-8 rounded-3xl shadow-xl border border-blue-100 animate-fadeIn">
-                   {/* Land Form (略) */}
+                   {/* Land Form */}
                    <div className="flex justify-between mb-8 font-bold text-blue-900 border-b pb-4"><h3 className="flex items-center gap-2 text-xl"><Map className="w-7 h-7" /> {editingLandId ? "修改標的" : "新增土地標的"}</h3><button onClick={() => setShowLandForm(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full transition"><X className="w-7 h-7" /></button></div>
                    <div className="bg-gray-50 p-6 rounded-2xl mb-8 border border-gray-100"><h4 className="text-xs font-black text-gray-400 mb-4 uppercase tracking-[0.2em]">步驟 1: 土地出售人</h4><div className="flex flex-col md:flex-row gap-4 mb-4"><div className="flex-1"><input list="pre-sellers" placeholder="出售人姓名" className="w-full p-3 border rounded-lg text-base outline-none bg-white" value={tempLandSeller.name} onChange={e => setTempLandSeller({...tempLandSeller, name: e.target.value})} /><datalist id="pre-sellers">{PREDEFINED_SELLERS.map(n => <option key={n} value={n} />)}</datalist></div><input placeholder="電話" className="flex-1 p-3 border rounded-lg text-base outline-none bg-white" value={tempLandSeller.phone} onChange={e => setTempLandSeller({...tempLandSeller, phone: e.target.value})} /><button onClick={addLandSeller} className="bg-gray-800 text-white px-8 rounded-lg font-black hover:bg-black transition shadow-lg text-sm">加入</button></div><div className="space-y-2">{tempLand.sellers.map(s => <div key={s.id} className="text-sm flex justify-between items-center p-3 bg-white border rounded-lg shadow-sm"><span>{s.name} | {s.phone}</span> <button onClick={() => removeLandSeller(s.id)} className="text-red-400 hover:bg-red-50 p-1 rounded-full"><Trash2 className="w-4 h-4" /></button></div>)}</div></div>
                    <div className="mb-8"><div className="flex justify-between items-center mb-4"><h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">步驟 2: 地號規格</h4><input placeholder="地段 (如：仁武段)" className="p-2 border rounded text-sm outline-none focus:ring-2 focus:ring-blue-100 w-40" value={tempLand.section} onChange={e => setTempLand({...tempLand, section: e.target.value})} /></div><div className="overflow-x-auto"><table className="w-full text-sm text-left border-collapse bg-white"><thead className="text-xs font-black uppercase text-gray-400 tracking-wider"><tr className="border-b"><th className="p-3 w-24">地號</th><th className="p-3 w-24">面積(㎡)</th><th className="p-3 w-16">分子</th><th className="p-3 w-16">分母</th><th className="p-3 w-28">單價</th><th className="p-3 text-right">小計金額</th><th className="p-3 w-12"></th></tr></thead><tbody className="divide-y">{tempLand.items.map((item, idx) => (<tr key={item.id} className="hover:bg-blue-50/30 transition"><td className="p-2"><input className="w-full p-2 border rounded outline-none focus:bg-white bg-transparent" value={item.lotNumber} onChange={e => handleLandItemChange(idx, 'lotNumber', e.target.value)} /></td><td className="p-2"><input type="number" className="w-full p-2 border rounded outline-none focus:bg-white bg-transparent" value={item.areaM2} onChange={e => handleLandItemChange(idx, 'areaM2', e.target.value)} /></td><td className="p-2"><input className="w-full p-2 border rounded outline-none text-center bg-transparent" value={item.shareNum} onChange={e => handleLandItemChange(idx, 'shareNum', e.target.value)} /></td><td className="p-2"><input className="w-full p-2 border rounded outline-none text-center bg-transparent" value={item.shareDenom} onChange={e => handleLandItemChange(idx, 'shareDenom', e.target.value)} /></td><td className="p-2"><input type="number" className="w-full p-2 border rounded outline-none bg-transparent" value={item.pricePerPing} onChange={e => handleLandItemChange(idx, 'pricePerPing', e.target.value)} /></td><td className="p-2 text-right relative"><input type="number" className="w-full p-2 pl-6 border border-blue-100 rounded outline-none font-mono font-black text-blue-600 text-right bg-blue-50/20 focus:bg-white" value={item.subtotal} onChange={e => handleLandItemChange(idx, 'subtotal', e.target.value)} /></td><td className="p-2"><button onClick={() => removeLandItemField(idx)} className="text-red-400 p-2 hover:bg-red-50 rounded"><Minus className="w-4 h-4" /></button></td></tr>))}</tbody></table><button onClick={addLandItemField} className="mt-4 w-full py-3 border-2 border-dashed rounded-xl text-blue-500 hover:bg-blue-50 transition flex justify-center items-center gap-1 font-bold text-sm"><Plus className="w-5 h-5" /> 增加地號行</button></div></div>
@@ -278,13 +289,13 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
            </div>
         )}
 
-        {/* 3. 建物 Tab (略) */}
+        {/* 3. 建物 Tab (✅ 修正：出售人放第一欄) */}
         {activeTab === 'building' && (
            <div className="space-y-6 animate-fadeIn">
               {!showBuildingForm && <button onClick={() => { setEditingBuildingId(null); setTempBuilding({ permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null }); setShowBuildingForm(true); }} className="w-full py-6 border-2 border-dashed rounded-2xl text-gray-400 hover:border-orange-500 hover:text-orange-500 flex justify-center items-center gap-2 transition bg-white shadow-sm text-lg font-bold"><Plus className="w-6 h-6" /> 新增建物案場資料</button>}
               {showBuildingForm && (
                 <div className="bg-white p-8 rounded-3xl shadow-xl border border-orange-200 animate-fadeIn">
-                   {/* Building Form (略) */}
+                   {/* Building Form */}
                    <div className="flex justify-between mb-8 font-bold text-orange-900 border-b pb-4"><h3 className="flex items-center gap-2 text-xl"><Home className="w-7 h-7" /> {editingBuildingId ? "修改建物資訊" : "新增建物案場"}</h3><button onClick={() => setShowBuildingForm(false)} className="text-gray-400 hover:bg-gray-100 p-2 rounded-full transition"><X className="w-7 h-7" /></button></div>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                      <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">建照號碼</label><div className="flex gap-2"><input placeholder="建照號碼" className="flex-1 w-full p-3 border rounded-lg text-base" value={tempBuilding.permitNumber} onChange={e => setTempBuilding({...tempBuilding, permitNumber: e.target.value})} /><label className="cursor-pointer bg-gray-100 hover:bg-gray-200 p-3 rounded-lg flex items-center gap-2 text-xs font-bold text-gray-500"><Camera className="w-4 h-4"/>{tempBuilding.permitImage ? "已存" : "圖檔"}<input type="file" className="hidden" accept="image/*" onChange={(e)=>handleImageUploadGeneric(e.target.files[0], (res)=>setTempBuilding({...tempBuilding, permitImage: res}))} /></label>{tempBuilding.permitImage && <button onClick={()=>setTempBuilding({...tempBuilding, permitImage: null})} className="bg-red-50 text-red-500 p-3 rounded-lg"><X className="w-4 h-4"/></button>}</div></div>
@@ -299,7 +310,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                    <button onClick={saveBuilding} className="w-full py-5 rounded-2xl text-white font-black bg-orange-600 shadow-xl transition-all hover:bg-orange-700 hover:scale-[1.01] tracking-widest uppercase font-bold text-lg">儲存建物標的</button>
                 </div>
               )}
-              {/* Building List */}
+              {/* Building List (✅ 修正：出售人放在第一欄) */}
               <div className="grid grid-cols-1 gap-6">
                 {buildings.map(b => (
                   <div key={b.id} className="bg-white p-8 rounded-[2rem] shadow-sm border border-gray-100 hover:shadow-xl hover:border-orange-100 transition-all duration-500 group">
@@ -307,10 +318,12 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-3"><span className="bg-orange-100 text-orange-700 text-xs px-3 py-1 rounded-full font-bold tracking-tighter">建物案場</span><h4 className="font-black text-gray-900 text-2xl">{b.sellers.length > 0 ? b.sellers.map(s => s.name).join(' / ') : `地址: ${b.address}`}</h4></div>
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-base text-gray-500 bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-inner">
+                            {/* ✅ 出售人第一欄 */}
+                            <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">出售人/屋主</span>{b.sellers.length > 0 ? b.sellers.map(s => s.name).join(' / ') : "-"}</div>
                             <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">建照號碼</span><div className="flex items-center gap-2">{b.permitNumber || "-"} {b.permitImage && <ImageIcon className="w-4 h-4 text-blue-500 cursor-pointer" onClick={()=>setPreviewImage(b.permitImage)}/>}</div></div>
                             <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">地址</span>{b.address}</div>
                             <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">建號</span><div className="flex items-center gap-2">{b.buildNumber} {b.buildNoImage && <ImageIcon className="w-4 h-4 text-blue-500 cursor-pointer" onClick={()=>setPreviewImage(b.buildNoImage)}/>}</div></div>
-                            <div className="md:col-span-3"><span className="text-xs text-orange-500 block font-black uppercase mb-1">總額</span><span className="font-mono font-black text-orange-600 text-xl">${Number(b.totalPrice).toLocaleString()}</span></div>
+                            <div className="md:col-span-2"><span className="text-xs text-orange-500 block font-black uppercase mb-1">總額</span><span className="font-mono font-black text-orange-600 text-xl">${Number(b.totalPrice).toLocaleString()}</span></div>
                           </div>
                         </div>
                         <div className="flex gap-3 ml-4">
@@ -366,7 +379,7 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
                     <div><label className="text-xs text-gray-400 block mb-2 font-black uppercase">日期</label><input type="date" className="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-100 bg-white" value={newTx.date} onChange={e => setNewTx({...newTx, date: e.target.value})} /></div>
                     <div><label className="text-xs text-gray-400 block mb-2 font-black uppercase">類型</label><select className="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-100 bg-white" value={newTx.type} onChange={e => setNewTx({...newTx, type: e.target.value, category: CATEGORIES[e.target.value][0]})}>{/* Options */}<option value="expense">支出</option><option value="income">收入</option></select></div>
                     <div><label className="text-xs text-blue-500 font-bold block mb-2 font-black uppercase tracking-widest">收支歸屬</label><select className="w-full p-4 border border-blue-100 rounded-xl bg-blue-50/20 font-bold outline-none" value={newTx.linkedType || "general"} onChange={e => setNewTx({...newTx, linkedType: e.target.value, linkedId: null})}><option value="general">一般專案收支</option><option value="land">土地標的</option><option value="building">建物標的</option></select></div>
-                    {newTx.linkedType !== 'general' && (<div><label className="text-xs text-blue-500 font-bold block mb-2 font-black uppercase tracking-widest">具體對象</label><select className="w-full p-4 border border-blue-100 rounded-xl bg-blue-50/20 font-bold outline-none" value={newTx.linkedId || ""} onChange={e => setNewTx({...newTx, linkedId: Number(e.target.value)})}>{/* Options */}{newTx.linkedType === 'land' ? lands.map(l=><option key={l.id} value={l.id}>{l.sellers.map(s=>s.name).join('/')}</option>) : buildings.map(b=><option key={b.id} value={b.id}>{b.address}</option>)}</select></div>)}
+                    {newTx.linkedType !== 'general' && (<div><label className="text-xs text-blue-500 font-bold block mb-2 font-black uppercase tracking-widest">具體對象</label><select className="w-full p-4 border border-blue-100 rounded-xl bg-blue-50/20 font-bold outline-none" value={newTx.linkedId || ""} onChange={e => setNewTx({...newTx, linkedId: Number(e.target.value)})}>{/* Options */}{newTx.linkedType === 'land' ? lands.map(l=><option key={l.id} value={l.id}>{l.sellers.map(s=>s.name).join('/')}</option>) : buildings.map(b=><option key={b.id} value={b.id}>{b.sellers.map(s=>s.name).join('/')}</option>)}</select></div>)}
                     <div><label className="text-xs text-gray-400 block mb-2 font-black uppercase">會計科目</label><select className="w-full p-4 border rounded-xl outline-none focus:ring-2 focus:ring-blue-100 bg-white" value={newTx.category} onChange={e => setNewTx({...newTx, category: e.target.value})}>{CATEGORIES[newTx.type].map(c=><option key={c} value={c}>{c}</option>)}</select></div>
                     <div><label className="text-xs text-blue-600 block mb-2 font-black underline uppercase">金額 ($)</label><input type="number" className="w-full p-4 border border-blue-100 rounded-xl font-black bg-blue-50/30 outline-none" value={newTx.amount} onChange={e => setNewTx({...newTx, amount: e.target.value})} /></div>
                   </div>
@@ -398,24 +411,22 @@ const ProjectEditor = ({ initialData, onSave, onBack }) => {
         <h1 className="text-2xl font-bold mb-2">專案管理報表: {projectName}</h1>
         <p className="text-sm text-gray-500 mb-8">列印日期: {new Date().toLocaleDateString()}</p>
         
-        {/* 全案土地總結算 */}
+        {/* ✅ 新增：專案團隊 */}
+        {printConfig.team && <section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">一、專案團隊資訊</h2><div className="grid grid-cols-2 gap-4 border p-4"><div>仲介公司: {projectTeam.agency}</div><div>經紀人: {projectTeam.broker}</div><div>開發業務: {projectTeam.developer}</div><div>行銷業務: {projectTeam.marketer}</div><div>承辦代書: {projectTeam.scrivener}</div></div></section>}
+
         {printConfig.lands && <section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">全案土地總結算</h2><div className="grid grid-cols-3 gap-4 border p-4 text-center"><div><span className="block text-xs text-gray-500 font-bold">總面積 (㎡)</span><span className="text-xl font-black">{landGrandTotal.m2}</span></div><div><span className="block text-xs text-gray-500 font-bold">總坪數</span><span className="text-xl font-black">{landGrandTotal.ping}</span></div><div><span className="block text-xs text-gray-500 font-bold">總金額 ($)</span><span className="text-xl font-black">${Number(landGrandTotal.price).toLocaleString()}</span></div></div></section>}
 
-        {/* 1. 買受人 */}
-        {printConfig.buyers && <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">一、買受人資訊</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">姓名</th><th className="border p-2">電話</th><th className="border p-2">地址</th></tr></thead><tbody>{buyers.map(b => (<tr key={b.id}><td className="border p-2">{b.name}</td><td className="border p-2">{b.phone}</td><td className="border p-2">{b.address}</td></tr>))}</tbody></table></section>}
+        {printConfig.buyers && <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">買受人資訊</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">姓名</th><th className="border p-2">電話</th><th className="border p-2">地址</th></tr></thead><tbody>{buyers.map(b => (<tr key={b.id}><td className="border p-2">{b.name}</td><td className="border p-2">{b.phone}</td><td className="border p-2">{b.address}</td></tr>))}</tbody></table></section>}
         
-        {/* 2. 土地 */}
-        {printConfig.lands && <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">二、土地標的</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">出售人</th><th className="border p-2">地段</th><th className="border p-2">地號</th><th className="border p-2">面積(m2)</th><th className="border p-2">坪數</th><th className="border p-2">總金額</th></tr></thead><tbody>{lands.map(l => (<tr key={l.id}><td className="border p-2">{l.sellers.map(s => s.name).join(', ')}</td><td className="border p-2">{l.section}</td><td className="border p-2 text-xs">{l.items.map(i => i.lotNumber).join(', ').substring(0, 50)}</td><td className="border p-2">{Number(l.holdingAreaM2).toFixed(3)}</td><td className="border p-2">{Number(l.holdingAreaPing).toFixed(3)}</td><td className="border p-2">${Number(l.totalPrice).toLocaleString()}</td></tr>))}</tbody></table></section>}
+        {printConfig.lands && <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">土地標的</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">出售人</th><th className="border p-2">地段</th><th className="border p-2">地號</th><th className="border p-2">面積(m2)</th><th className="border p-2">坪數</th><th className="border p-2">總金額</th></tr></thead><tbody>{lands.map(l => (<tr key={l.id}><td className="border p-2">{l.sellers.map(s => s.name).join(', ')}</td><td className="border p-2">{l.section}</td><td className="border p-2 text-xs">{l.items.map(i => i.lotNumber).join(', ').substring(0, 50)}</td><td className="border p-2">{Number(l.holdingAreaM2).toFixed(3)}</td><td className="border p-2">{Number(l.holdingAreaPing).toFixed(3)}</td><td className="border p-2">${Number(l.totalPrice).toLocaleString()}</td></tr>))}</tbody></table></section>}
         
-        {/* 3. 建物 */}
-        {printConfig.buildings && <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">三、建物標的</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">建照</th><th className="border p-2">地址</th><th className="border p-2">建號</th><th className="border p-2">面積(m2)</th><th className="border p-2">總金額</th></tr></thead><tbody>{buildings.map(b => (<tr key={b.id}><td className="border p-2">{b.permitNumber}</td><td className="border p-2">{b.address}</td><td className="border p-2">{b.buildNumber}</td><td className="border p-2">{b.areaM2}</td><td className="border p-2">${Number(b.totalPrice).toLocaleString()}</td></tr>))}</tbody></table></section>}
+        {/* ✅ 建物出售人放第一欄 */}
+        {printConfig.buildings && <section className="mb-8"><h2 className="text-lg font-bold border-b pb-2 mb-4">建物標的</h2><table className="w-full text-sm border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">出售人</th><th className="border p-2">建照</th><th className="border p-2">地址</th><th className="border p-2">建號</th><th className="border p-2">面積(m2)</th><th className="border p-2">總金額</th></tr></thead><tbody>{buildings.map(b => (<tr key={b.id}><td className="border p-2">{b.sellers.map(s => s.name).join(', ')}</td><td className="border p-2">{b.permitNumber}</td><td className="border p-2">{b.address}</td><td className="border p-2">{b.buildNumber}</td><td className="border p-2">{b.areaM2}</td><td className="border p-2">${Number(b.totalPrice).toLocaleString()}</td></tr>))}</tbody></table></section>}
         
-        {/* 4. 交屋 */}
-        {printConfig.handover && handoverData && (<section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">四、交屋點交確認</h2><div className="grid grid-cols-2 gap-2 text-sm border p-4"><div>點交日期: {handoverData.handoverDate}</div><div>遙控器: {handoverData.remotes}</div><div>小門鑰匙(前): {handoverData.keysFront}</div><div>小門鑰匙(後): {handoverData.keysBack}</div><div>保固書: {handoverData.warranty?"有":"無"}</div><div>竣工圖: {handoverData.drawings?"有":"無"}</div><div>使照正本: {handoverData.originalPermit?"有":"無"}</div><div>電單號碼: {handoverData.electricityBill}</div><div>水單號碼: {handoverData.waterBill}</div></div></section>)}
+        {printConfig.handover && handoverData && (<section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">交屋點交確認</h2><div className="grid grid-cols-2 gap-2 text-sm border p-4"><div>點交日期: {handoverData.handoverDate}</div><div>遙控器: {handoverData.remotes}</div><div>小門鑰匙(前): {handoverData.keysFront}</div><div>小門鑰匙(後): {handoverData.keysBack}</div><div>保固書: {handoverData.warranty?"有":"無"}</div><div>竣工圖: {handoverData.drawings?"有":"無"}</div><div>使照正本: {handoverData.originalPermit?"有":"無"}</div><div>電單號碼: {handoverData.electricityBill}</div><div>水單號碼: {handoverData.waterBill}</div></div></section>)}
         
-        {/* 5. 財務 */}
-        {printConfig.finance && <section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">五、財務摘要</h2><div className="flex gap-8 mb-4"><div>總收入: ${stats.totalIncome.toLocaleString()}</div><div>總支出: ${stats.totalExpense.toLocaleString()}</div><div>淨利: ${stats.netProfit.toLocaleString()}</div></div></section>}
-        {printConfig.finance && <section><h2 className="text-lg font-bold border-b pb-2 mb-4">六、收支明細</h2><table className="w-full text-xs border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">日期</th><th className="border p-2">類型</th><th className="border p-2">科目</th><th className="border p-2">說明</th><th className="border p-2 text-right">金額</th></tr></thead><tbody>{transactions.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => (<tr key={t.id}><td className="border p-2">{t.date}</td><td className="border p-2">{t.type === 'income' ? '收入' : '支出'}</td><td className="border p-2">{t.category}</td><td className="border p-2">{t.note}</td><td className={`border p-2 text-right`}>${Number(t.amount).toLocaleString()}</td></tr>))}</tbody></table></section>}
+        {printConfig.finance && <section className="mb-8 break-inside-avoid"><h2 className="text-lg font-bold border-b pb-2 mb-4">財務摘要</h2><div className="flex gap-8 mb-4"><div>總收入: ${stats.totalIncome.toLocaleString()}</div><div>總支出: ${stats.totalExpense.toLocaleString()}</div><div>淨利: ${stats.netProfit.toLocaleString()}</div></div></section>}
+        {printConfig.finance && <section><h2 className="text-lg font-bold border-b pb-2 mb-4">收支明細</h2><table className="w-full text-xs border-collapse border border-gray-300"><thead><tr className="bg-gray-100"><th className="border p-2">日期</th><th className="border p-2">類型</th><th className="border p-2">科目</th><th className="border p-2">說明</th><th className="border p-2 text-right">金額</th></tr></thead><tbody>{transactions.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => (<tr key={t.id}><td className="border p-2">{t.date}</td><td className="border p-2">{t.type === 'income' ? '收入' : '支出'}</td><td className="border p-2">{t.category}</td><td className="border p-2">{t.note}</td><td className={`border p-2 text-right`}>${Number(t.amount).toLocaleString()}</td></tr>))}</tbody></table></section>}
       </div>
 
       {/* 圖片預覽 Modal */}
