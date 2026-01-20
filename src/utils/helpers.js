@@ -23,13 +23,13 @@ export const createEmptyLandItem = () => ({
   subtotal: "" 
 });
 
-// ✅ CSV 匯出邏輯 (新增：專案團隊資料)
+// CSV 匯出邏輯 (✅ 已修正：用語調整為「出售人」)
 export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions, handoverData, projectTeam) => {
     let csvContent = "\uFEFF"; 
     csvContent += `=== 專案報表: ${projectName} ===\n`;
     csvContent += `匯出日期,${new Date().toLocaleString()}\n\n`;
 
-    // 0. ✅ 專案團隊資料
+    // 0. 專案團隊
     if (projectTeam) {
       csvContent += "=== 專案團隊資訊 ===\n";
       csvContent += `仲介公司,${projectTeam.agency || ''}\n`;
@@ -39,7 +39,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
       csvContent += `承辦代書,${projectTeam.scrivener || ''}\n\n`;
     }
 
-    // 1. 買受人資料
+    // 1. 買受人
     csvContent += "=== 買受人資訊 ===\n";
     csvContent += "姓名,電話,地址\n";
     buyers.forEach(b => {
@@ -47,7 +47,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 2. 土地資料
+    // 2. 土地
     csvContent += "=== 土地標的清單 ===\n";
     csvContent += "出售人,地段,地號,持有面積(m2),持有坪數,單價(元/坪),小計($)\n";
     lands.forEach(l => {
@@ -60,7 +60,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 3. 建物資料 (✅ 出售人已在第一欄)
+    // 3. 建物
     csvContent += "=== 建物標的清單 ===\n";
     csvContent += "出售人/屋主,建照號碼,門牌地址,使照號碼,建號,面積(m2),單價(元/坪),成交總額($)\n";
     buildings.forEach(b => {
@@ -69,19 +69,29 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 4. 財務收支
+    // 4. 財務收支 (✅ 修正：歸屬欄位顯示中文)
     csvContent += "=== 財務收支明細 ===\n";
-    csvContent += "日期,類型,科目,歸屬,具體對象(出售人/屋主),金額,備註\n";
+    csvContent += "日期,類型,科目,歸屬類別,具體對象,金額,備註\n";
     transactions.forEach(t => {
-        let linkedLabel = "一般專案收支";
-        if(t.linkedType === 'land') { const land = lands.find(l=>l.id===t.linkedId); linkedLabel = land ? (land.sellers.map(s=>s.name).join('/') || land.items[0]?.lotNumber) : '未知土地'; } 
-        else if(t.linkedType === 'building') { const build = buildings.find(b=>b.id===t.linkedId); linkedLabel = build ? (build.sellers.map(s=>s.name).join('/') || build.address.substring(0,8)) : '未知建物'; }
+        let linkTypeTw = "一般專案";
+        let linkedLabel = "-";
         
-        csvContent += `${t.date},${t.type === 'income' ? '收入' : '支出'},${t.category},${t.linkedType},"${linkedLabel}",${t.amount},"${t.note}"\n`;
+        if(t.linkedType === 'land') { 
+            linkTypeTw = "土地出售人";
+            const land = lands.find(l=>l.id===t.linkedId); 
+            linkedLabel = land ? (land.sellers.map(s=>s.name).join('/') || land.items[0]?.lotNumber) : '未知'; 
+        } 
+        else if(t.linkedType === 'building') { 
+            linkTypeTw = "建物出售人";
+            const build = buildings.find(b=>b.id===t.linkedId); 
+            linkedLabel = build ? (build.sellers.map(s=>s.name).join('/') || build.address.substring(0,8)) : '未知'; 
+        }
+        
+        csvContent += `${t.date},${t.type === 'income' ? '收入' : '支出'},${t.category},${linkTypeTw},"${linkedLabel}",${t.amount},"${t.note}"\n`;
     });
     csvContent += "\n";
 
-    // 5. 交屋點交確認單
+    // 5. 交屋
     if (handoverData) {
       csvContent += "=== 交屋點交確認單 ===\n";
       csvContent += `點交日期,${handoverData.handoverDate || ''}\n`;
