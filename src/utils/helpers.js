@@ -23,19 +23,25 @@ export const createEmptyLandItem = () => ({
   subtotal: "" 
 });
 
-// CSV 匯出邏輯 (✅ 已修正：用語調整為「出售人」)
+// CSV 匯出邏輯 (✅ 已更新：包含新合約欄位)
 export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions, handoverData, projectTeam) => {
     let csvContent = "\uFEFF"; 
     csvContent += `=== 專案報表: ${projectName} ===\n`;
     csvContent += `匯出日期,${new Date().toLocaleString()}\n\n`;
 
-    // 0. 專案團隊
+    // 0. 專案團隊資料
     if (projectTeam) {
       csvContent += "=== 專案團隊資訊 ===\n";
       csvContent += `仲介公司,${projectTeam.agency || ''}\n`;
       csvContent += `經紀人,${projectTeam.broker || ''}\n`;
-      csvContent += `開發業務,${projectTeam.developer || ''}\n`;
-      csvContent += `行銷業務,${projectTeam.marketer || ''}\n`;
+      
+      // 開發業務詳情
+      const devType = projectTeam.developerType === 'exclusive' ? '專任約' : '一般約';
+      csvContent += `開發業務,${projectTeam.developer || ''},合約類型,${devType},合約號碼,${projectTeam.developerNo || ''}\n`;
+      
+      // 行銷業務詳情
+      csvContent += `行銷業務,${projectTeam.marketer || ''},單據類型,斡旋/訂金,單據號碼,${projectTeam.marketerNo || ''}\n`;
+      
       csvContent += `承辦代書,${projectTeam.scrivener || ''}\n\n`;
     }
 
@@ -69,7 +75,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 4. 財務收支 (✅ 修正：歸屬欄位顯示中文)
+    // 4. 財務收支
     csvContent += "=== 財務收支明細 ===\n";
     csvContent += "日期,類型,科目,歸屬類別,具體對象,金額,備註\n";
     transactions.forEach(t => {
