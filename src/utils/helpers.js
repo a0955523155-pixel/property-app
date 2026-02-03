@@ -12,14 +12,25 @@ export const toPing = (m2) => {
   return isNaN(val) ? 0 : (val * 0.3025);
 };
 
+// 民國年轉換工具
+export const toROCDate = (isoDate) => {
+  if (!isoDate) return "";
+  const date = new Date(isoDate);
+  if (isNaN(date.getTime())) return isoDate;
+  const year = date.getFullYear() - 1911;
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const createEmptyLandItem = () => ({
   id: Date.now() + Math.random(),
   lotNumber: "",
   areaM2: "",
   shareNum: "1",
   shareDenom: "1",
-  detailM2: "",   // 持分面積 (手動修正用)
-  detailPing: "", // 持分坪數 (手動修正用)
+  detailM2: "",   
+  detailPing: "", 
   pricePerPing: "",
   subtotal: "" 
 });
@@ -28,7 +39,7 @@ export const createEmptyLandItem = () => ({
 export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions, handoverData, projectTeam, requisitions, visibleLandIds = null) => {
     let csvContent = "\uFEFF"; 
     csvContent += `=== 專案報表: ${projectName} ===\n`;
-    csvContent += `匯出日期,${new Date().toLocaleString()}\n\n`;
+    csvContent += `匯出日期,${toROCDate(new Date())}\n\n`;
 
     // 0. 專案團隊
     if (projectTeam) {
@@ -49,41 +60,41 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 2. 土地 (✅ 修正：詳細列出地號規格、收支負號、本筆合計)
-    csvContent += "=== 土地標的詳細清單 (金額為支出) ===\n";
-    csvContent += "出售人,地段,地號,原始面積(m2),持分(分子/分母),持分面積(m2),持分坪數,單價(元/坪),小計($)\n";
+    // 2. 土地 (✅ 修正：金額改回正數)
+    csvContent += "=== 土地標的詳細清單 ===\n";
+    csvContent += "出售人(地址),地段,地號,原始面積(m2),持分(分子/分母),持分面積(m2),持分坪數,單價(元/坪),小計($)\n";
     
     const targetLands = visibleLandIds ? lands.filter(l => visibleLandIds.includes(l.id)) : lands;
 
     targetLands.forEach(l => {
-      const sellersStr = l.sellers.map(s => s.name).join(';');
+      const sellersStr = l.sellers.map(s => `${s.name}${s.address ? `(${s.address})` : ''}`).join('; ');
       
-      // 列出每一筆地號
       l.items.forEach(item => {
         const rawM2 = Number(item.areaM2) || 0;
         const num = Number(item.shareNum) || 0;
         const denom = Number(item.shareDenom) || 1;
-        // 優先使用手動調整數值
         const hM2 = item.detailM2 ? item.detailM2 : (rawM2 * (num / denom)).toFixed(3);
         const hPing = item.detailPing ? item.detailPing : toPing(hM2).toFixed(3);
         
-        // 金額加負號 (支出)
-        const cost = Number(item.subtotal) > 0 ? `-${item.subtotal}` : item.subtotal;
+        // ✅ 顯示正數
+        const cost = item.subtotal;
 
         csvContent += `"${sellersStr}",${l.section},${item.lotNumber},${rawM2},${num}/${denom},${hM2},${hPing},${item.pricePerPing},${cost}\n`;
       });
-
-      // ✅ 加入 [本筆合計] 行
-      csvContent += `,,[本筆合計],,,${Number(l.holdingAreaM2).toFixed(3)},${Number(l.holdingAreaPing).toFixed(3)},,-${Number(l.totalPrice)}\n`;
+      csvContent += `,,[本筆合計],,,${Number(l.holdingAreaM2).toFixed(3)},${Number(l.holdingAreaPing).toFixed(3)},,${Number(l.totalPrice)}\n`;
     });
     csvContent += "\n";
 
-    // 3. 建物
+    // 3. 建物 (✅ 新增：出售日期)
     csvContent += "=== 建物標的清單 ===\n";
-    csvContent += "出售人/屋主,建照號碼,門牌地址,使照號碼,建號,面積(m2),單價(元/坪),成交總額($)\n";
-    buildings.forEach(b => {
+    csvContent += "出售日期,出售人/屋主,建照號碼,門牌地址,使照號碼,建號,面積(m2),單價(元/坪),成交總額($)\n";
+    
+    // 匯出時也依照地址排序
+    const sortedBuildings = [...buildings].sort((a, b) => (a.address || "").localeCompare(b.address || "", "zh-Hant"));
+
+    sortedBuildings.forEach(b => {
         const sellersStr = b.sellers.map(s => s.name).join(';');
-        csvContent += `"${sellersStr}","${b.permitNumber || ''}","${b.address}","${b.license}","${b.buildNumber}",${b.areaM2},${b.pricePerUnit},-${b.totalPrice}\n`;
+        csvContent += `${toROCDate(b.saleDate)},"${sellersStr}","${b.permitNumber || ''}","${b.address}","${b.license}","${b.buildNumber}",${b.areaM2},${b.pricePerUnit},${b.totalPrice}\n`;
     });
     csvContent += "\n";
 
@@ -102,7 +113,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
         csvContent += "日期,標的物,款項明細,金額\n";
         let subTotal = 0;
         reqGroups[shareholder].forEach(r => {
-           csvContent += `${r.date},"${r.target}","${r.details}",-${r.amount}\n`;
+           csvContent += `${toROCDate(r.date)},"${r.target}","${r.details}",-${r.amount}\n`;
            subTotal += Number(r.amount) || 0;
         });
         csvContent += `,,,總計: -${subTotal}\n\n`;
@@ -116,6 +127,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     transactions.forEach(t => {
         let linkTypeTw = "一般專案";
         let linkedLabel = "-";
+        
         if(t.linkedType === 'land') { 
             linkTypeTw = "土地出售人";
             const land = lands.find(l=>l.id===t.linkedId); 
@@ -124,14 +136,31 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
             linkTypeTw = "建物出售人";
             const build = buildings.find(b=>b.id===t.linkedId); 
             linkedLabel = build ? (build.sellers.map(s=>s.name).join('/') || build.address.substring(0,8)) : '未知'; 
+        } else if(t.linkedType === 'buyer') {
+            linkTypeTw = "買受人";
+            const buyer = buyers.find(b=>b.id===t.linkedId);
+            linkedLabel = buyer ? buyer.name : '未知';
         }
+
         const finalAmt = t.type === 'expense' ? `-${t.amount}` : t.amount;
-        csvContent += `${t.date},${t.type === 'income' ? '收入' : '支出'},${t.category},${linkTypeTw},"${linkedLabel}",${finalAmt},"${t.note}"\n`;
+        csvContent += `${toROCDate(t.date)},${t.type === 'income' ? '收入' : '支出'},${t.category},${linkTypeTw},"${linkedLabel}",${finalAmt},"${t.note}"\n`;
     });
     csvContent += "\n";
 
-    // 6. 交屋 (略)
-    if (handoverData) { /* ... same as before ... */ }
+    // 6. 交屋
+    if (handoverData) {
+      csvContent += "=== 交屋點交確認單 ===\n";
+      csvContent += `點交日期,${toROCDate(handoverData.handoverDate)}\n`;
+      csvContent += "項目,內容/數量\n";
+      csvContent += `遙控器,${handoverData.remotes} 顆\n`;
+      csvContent += `小門鑰匙(前),${handoverData.keysFront} 支\n`;
+      csvContent += `小門鑰匙(後),${handoverData.keysBack} 支\n`;
+      csvContent += `廠房保固書,${handoverData.warranty ? "有" : "無"}\n`;
+      csvContent += `廠房竣工圖,${handoverData.drawings ? "有" : "無"}\n`;
+      csvContent += `使用執照正本,${handoverData.originalPermit ? "有" : "無"}\n`;
+      csvContent += `電單號碼,${handoverData.electricityBill}\n`;
+      csvContent += `水單號碼,${handoverData.waterBill}\n`;
+    }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
