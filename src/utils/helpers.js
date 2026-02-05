@@ -12,7 +12,7 @@ export const toPing = (m2) => {
   return isNaN(val) ? 0 : (val * 0.3025);
 };
 
-// 民國年轉換工具
+// 民國年轉換
 export const toROCDate = (isoDate) => {
   if (!isoDate) return "";
   const date = new Date(isoDate);
@@ -25,8 +25,8 @@ export const toROCDate = (isoDate) => {
 
 export const createEmptyLandItem = () => ({
   id: Date.now() + Math.random(),
-  date: "", // 新增: 成交日期
-  unit: "", // 新增: 戶號
+  date: new Date().toISOString().split('T')[0], // 預設今天
+  unit: "",
   lotNumber: "",
   areaM2: "",
   shareNum: "1",
@@ -37,41 +37,45 @@ export const createEmptyLandItem = () => ({
   subtotal: "" 
 });
 
-// ✅ CSV 匯出邏輯 (全面更新欄位順序)
+// ✅ 安全字串處理：防止 CSV 跑版 (移除換行、處理逗號、強制加引號)
+const safe = (str) => {
+  if (str === null || str === undefined) return '""';
+  const cleanStr = String(str).replace(/\n/g, ' ').replace(/\r/g, '').replace(/"/g, '""');
+  return `"${cleanStr}"`;
+};
+
+// ✅ CSV 匯出邏輯 (模組化 & 防跑版)
 export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions, handoverData, projectTeams, requisitions, visibleLandIds = null) => {
     let csvContent = "\uFEFF"; 
-    csvContent += `=== 專案報表: ${projectName} ===\n`;
-    csvContent += `匯出日期,${toROCDate(new Date())}\n\n`;
+    csvContent += `=== 專案報表: ${safe(projectName)} ===\n`;
+    csvContent += `匯出日期,${safe(toROCDate(new Date()))}\n\n`;
 
-    // 0. 專案團隊 (改為列表)
+    // 0. 專案團隊
     if (projectTeams && projectTeams.length > 0) {
       csvContent += "=== 專案團隊資訊 ===\n";
       csvContent += "歸屬戶號,仲介公司,經紀人,開發業務,合約類型,合約編號,行銷業務,單據類型,單據編號,承辦代書\n";
-      
       projectTeams.forEach(team => {
           const devType = team.developerType === 'exclusive' ? '專任約' : '一般約';
-          csvContent += `"${team.unit || ''}","${team.agency || ''}","${team.broker || ''}","${team.developer || ''}","${devType}","${team.developerNo || ''}","${team.marketer || ''}","斡旋/訂金","${team.marketerNo || ''}","${team.scrivener || ''}"\n`;
+          csvContent += `${safe(team.unit)},${safe(team.agency)},${safe(team.broker)},${safe(team.developer)},${safe(devType)},${safe(team.developerNo)},${safe(team.marketer)},"斡旋/訂金",${safe(team.marketerNo)},${safe(team.scrivener)}\n`;
       });
       csvContent += "\n";
     }
 
-    // 1. 買受人 (戶號在前，價格在後)
+    // 1. 買受人
     csvContent += "=== 買受人資訊 ===\n";
     csvContent += "戶號,姓名,電話,地址,土地合約價,建物合約價,合約總價\n";
     buyers.forEach(b => {
-        csvContent += `"${b.unit || ''}","${b.name}","${b.phone}","${b.address}",${b.landPrice || 0},${b.buildingPrice || 0},${b.totalPrice || 0}\n`;
+        csvContent += `${safe(b.unit)},${safe(b.name)},${safe(b.phone)},${safe(b.address)},${b.landPrice || 0},${b.buildingPrice || 0},${b.totalPrice || 0}\n`;
     });
     csvContent += "\n";
 
-    // 2. 土地 (新增日期、戶號)
+    // 2. 土地
     csvContent += "=== 土地標的詳細清單 ===\n";
     csvContent += "出售人(地址),地段,成交日期,戶號,地號,原始面積(m2),持分(分子/分母),持分面積(m2),持分坪數,單價(元/坪),小計($)\n";
-    
     const targetLands = visibleLandIds ? lands.filter(l => visibleLandIds.includes(l.id)) : lands;
 
     targetLands.forEach(l => {
       const sellersStr = l.sellers.map(s => `${s.name}${s.address ? `(${s.address})` : ''}`).join('; ');
-      
       l.items.forEach(item => {
         const rawM2 = Number(item.areaM2) || 0;
         const num = Number(item.shareNum) || 0;
@@ -79,22 +83,19 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
         const hM2 = item.detailM2 ? item.detailM2 : (rawM2 * (num / denom)).toFixed(3);
         const hPing = item.detailPing ? item.detailPing : toPing(hM2).toFixed(3);
         const cost = item.subtotal;
-
-        csvContent += `"${sellersStr}",${l.section},${toROCDate(item.date)},"${item.unit || ''}",${item.lotNumber},${rawM2},${num}/${denom},${hM2},${hPing},${item.pricePerPing},${cost}\n`;
+        csvContent += `${safe(sellersStr)},${safe(l.section)},${safe(toROCDate(item.date))},${safe(item.unit)},${safe(item.lotNumber)},${rawM2},${num}/${denom},${hM2},${hPing},${item.pricePerPing},${cost}\n`;
       });
       csvContent += `,,,[本筆合計],,,,,${Number(l.holdingAreaM2).toFixed(3)},${Number(l.holdingAreaPing).toFixed(3)},,${Number(l.totalPrice)}\n`;
     });
     csvContent += "\n";
 
-    // 3. 建物 (新增日期、戶號)
+    // 3. 建物
     csvContent += "=== 建物標的清單 ===\n";
     csvContent += "成交日期,戶號,出售人/屋主,建照號碼,門牌地址,使照號碼,建號,面積(m2),單價(元/坪),成交總額($)\n";
-    
     const sortedBuildings = [...buildings].sort((a, b) => (a.unit || a.address || "").localeCompare(b.unit || b.address || "", "zh-Hant"));
-
     sortedBuildings.forEach(b => {
         const sellersStr = b.sellers.map(s => s.name).join(';');
-        csvContent += `${toROCDate(b.saleDate)},"${b.unit || ''}","${sellersStr}","${b.permitNumber || ''}","${b.address}","${b.license}","${b.buildNumber}",${b.areaM2},${b.pricePerUnit},${b.totalPrice}\n`;
+        csvContent += `${safe(toROCDate(b.saleDate))},${safe(b.unit)},${safe(sellersStr)},${safe(b.permitNumber)},${safe(b.address)},${safe(b.license)},${safe(b.buildNumber)},${b.areaM2},${b.pricePerUnit},${b.totalPrice}\n`;
     });
     csvContent += "\n";
 
@@ -107,13 +108,12 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
         acc[key].push(curr);
         return acc;
       }, {});
-
       Object.keys(reqGroups).forEach(shareholder => {
-        csvContent += `--- 股東: ${shareholder} ---\n`;
+        csvContent += `--- 股東: ${safe(shareholder)} ---\n`;
         csvContent += "日期,標的物,款項明細,金額\n";
         let subTotal = 0;
         reqGroups[shareholder].forEach(r => {
-           csvContent += `${toROCDate(r.date)},"${r.target}","${r.details}",-${r.amount}\n`;
+           csvContent += `${safe(toROCDate(r.date))},${safe(r.target)},${safe(r.details)},-${r.amount}\n`;
            subTotal += Number(r.amount) || 0;
         });
         csvContent += `,,,總計: -${subTotal}\n\n`;
@@ -121,39 +121,26 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
       csvContent += "\n";
     }
 
-    // 5. 財務收支
+    // 5. 財務
     csvContent += "=== 財務收支明細 ===\n";
     csvContent += "日期,類型,科目,歸屬類別,具體對象,金額,備註\n";
     transactions.forEach(t => {
         let linkTypeTw = "一般專案";
         let linkedLabel = "-";
-        
-        if(t.linkedType === 'land') { 
-            linkTypeTw = "土地出售人";
-            const land = lands.find(l=>l.id===t.linkedId); 
-            linkedLabel = land ? (land.sellers.map(s=>s.name).join('/') || land.items[0]?.lotNumber) : '未知'; 
-        } else if(t.linkedType === 'building') { 
-            linkTypeTw = "建物出售人";
-            const build = buildings.find(b=>b.id===t.linkedId); 
-            linkedLabel = build ? (build.sellers.map(s=>s.name).join('/') || build.address.substring(0,8)) : '未知'; 
-        } else if(t.linkedType === 'buyer') {
-            linkTypeTw = "買受人";
-            const buyer = buyers.find(b=>b.id===t.linkedId);
-            linkedLabel = buyer ? buyer.name : '未知';
-        }
-
+        if(t.linkedType === 'land') { const land = lands.find(l=>l.id===t.linkedId); linkedLabel = land ? (land.sellers.map(s=>s.name).join('/') || land.items[0]?.lotNumber) : '未知'; } 
+        else if(t.linkedType === 'building') { const build = buildings.find(b=>b.id===t.linkedId); linkedLabel = build ? (build.sellers.map(s=>s.name).join('/') || build.address.substring(0,8)) : '未知'; } 
+        else if(t.linkedType === 'buyer') { const buyer = buyers.find(b=>b.id===t.linkedId); linkedLabel = buyer ? buyer.name : '未知'; }
         const finalAmt = t.type === 'expense' ? `-${t.amount}` : t.amount;
-        csvContent += `${toROCDate(t.date)},${t.type === 'income' ? '收入' : '支出'},${t.category},${linkTypeTw},"${linkedLabel}",${finalAmt},"${t.note}"\n`;
+        csvContent += `${safe(toROCDate(t.date))},${t.type === 'income' ? '收入' : '支出'},${safe(t.category)},${linkTypeTw},${safe(linkedLabel)},${finalAmt},${safe(t.note)}\n`;
     });
     csvContent += "\n";
 
     // 6. 交屋
     if (handoverData) {
       csvContent += "=== 交屋點交確認單 ===\n";
-      csvContent += `點交日期,${toROCDate(handoverData.handoverDate)}\n`;
-      // ... (略)
-      csvContent += `電單號碼,${handoverData.electricityBill}\n`;
-      csvContent += `水單號碼,${handoverData.waterBill}\n`;
+      csvContent += `點交日期,${safe(toROCDate(handoverData.handoverDate))}\n`;
+      csvContent += `電單號碼,${safe(handoverData.electricityBill)}\n`;
+      csvContent += `水單號碼,${safe(handoverData.waterBill)}\n`;
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
