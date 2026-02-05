@@ -1,0 +1,65 @@
+import React, { useState, useMemo } from 'react';
+import { DollarSign, Edit2, Trash2, Camera, Check, X, ImageIcon, Calculator, Filter } from 'lucide-react';
+import { CATEGORIES, toROCDate } from '../../utils/helpers';
+
+const TransactionTable = ({ data, typeLabel, colorTheme, subStats, setEditingTxId, setNewTx, setTransactions, transactions, setPreviewImage }) => {
+    const net = (subStats?.income || 0) - (subStats?.expense || 0);
+    return (
+        <div className={`rounded-2xl border bg-white overflow-hidden mb-8 shadow-md transition-all hover:shadow-lg ${colorTheme} break-inside-avoid`}>
+        <div className="p-4 border-b bg-gray-50/50 flex justify-between items-center"><h4 className="font-black text-gray-700 flex items-center gap-2 text-lg">{typeLabel}</h4><span className="text-xs font-bold text-gray-400 bg-white px-2 py-1 rounded border">共 {data.length} 筆</span></div><div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="text-xs text-gray-400 bg-gray-50 uppercase tracking-wider"><tr><th className="p-4 w-28 whitespace-nowrap">日期</th><th className="p-4 w-32 whitespace-nowrap">類型</th><th className="p-4 min-w-[200px]">項目 / 對象 / 備註</th><th className="p-4 text-right w-32 whitespace-nowrap">金額</th><th className="p-4 w-16 text-center print:hidden">操作</th></tr></thead>
+        <tbody className="divide-y divide-gray-100">{data.map(t => { 
+            return (<tr key={t.id} className="hover:bg-gray-50 group transition-colors"><td className="p-4 text-gray-500 font-mono text-sm whitespace-nowrap">{toROCDate(t.date)}</td><td className="p-4 whitespace-nowrap"><span className={`px-3 py-1.5 rounded-full text-xs font-bold ${t.type==='income'?'bg-red-100 text-red-600':'bg-blue-100 text-blue-600'}`}>{t.category}</span></td><td className="p-4"><span className="text-gray-700 font-medium">{t.note || "-"}</span>{t.image && <button onClick={() => setPreviewImage(t.image)} className="text-xs text-blue-500 hover:text-blue-700 font-bold flex items-center gap-1 mt-1 whitespace-nowrap"><ImageIcon className="w-3 h-3"/> 憑證</button>}</td><td className={`p-4 text-right font-mono font-black text-base whitespace-nowrap ${t.type==='income'?'text-red-600':'text-blue-600'}`}>{t.type==='expense' && '-'}{Number(t.amount).toLocaleString()}</td>
+            <td className="p-4 text-center print:hidden">
+              <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition"><button onClick={() => {setEditingTxId(t.id); setNewTx({...t});}} className="text-gray-400 hover:text-blue-600"><Edit2 className="w-4 h-4"/></button><button onClick={() => { if(confirm("刪除？")) setTransactions(transactions.filter(item => item.id !== t.id)) }} className="text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button></div>
+            </td></tr>); })}</tbody>
+        <tfoot className="bg-gray-50 border-t-2 border-gray-100 text-xs"><tr><td colSpan="3" className="p-4 text-right font-bold text-gray-500 uppercase tracking-widest">本欄小計</td><td className="p-4 text-right whitespace-nowrap"><div className="flex justify-end gap-3"><div className="text-red-600 font-bold">收 ${subStats?.income?.toLocaleString()}</div><div className="text-blue-600 font-bold">支 ${subStats?.expense?.toLocaleString()}</div></div><div className={`mt-1 pt-1 border-t border-gray-200 font-black text-sm ${net >= 0 ? 'text-red-600' : 'text-blue-600'}`}>淨 ${net.toLocaleString()}</div></td><td className="print:hidden"></td></tr></tfoot></table></div></div>
+    );
+};
+
+const FinanceSection = ({ transactions, setTransactions, stats, groupedTransactions, lands, buildings, buyers, visibleLedgers, setVisibleLedgers, handleImageUploadGeneric, setPreviewImage }) => {
+  const [newTx, setNewTx] = useState({ date: new Date().toISOString().split('T')[0], type: 'expense', category: CATEGORIES.expense[0], amount: '', note: '', image: null, linkedId: null, linkedType: 'general' });
+  const [editingTxId, setEditingTxId] = useState(null);
+
+  const saveTransaction = (e) => {
+     if(e) e.preventDefault();
+     if (!newTx.amount) return;
+     if (editingTxId) setTransactions(transactions.map(t => t.id === editingTxId ? { ...newTx, id: t.id, amount: Number(newTx.amount) } : t));
+     else setTransactions([...transactions, { ...newTx, id: Date.now(), amount: Number(newTx.amount) }]);
+     setNewTx({ date: new Date().toISOString().split('T')[0], type: 'expense', category: CATEGORIES.expense[0], amount: '', note: '', image: null, linkedId: null, linkedType: 'general' });
+     setEditingTxId(null);
+  };
+  
+  return (
+    <div className="space-y-8 animate-fadeIn">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-center h-32"><div className="text-sm text-gray-400 font-black uppercase text-center">總收入</div><div className="text-4xl font-black text-red-600 text-center">${stats.totalIncome.toLocaleString()}</div></div><div className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-center h-32"><div className="text-sm text-gray-400 font-black uppercase text-center">總支出</div><div className="text-4xl font-black text-blue-600 text-center">${stats.totalExpense.toLocaleString()}</div></div><div className={`p-6 rounded-2xl shadow-xl flex flex-col justify-center h-32 ${stats.netProfit >= 0 ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'}`}><div className="text-sm text-white/60 font-black uppercase text-center">淨利 (ROI: {stats.roi}%)</div><div className="text-4xl font-black text-center">${stats.netProfit.toLocaleString()}</div></div></div>
+        
+        <div className="bg-gray-50 border rounded-xl p-4 flex flex-wrap gap-6"><label className="flex gap-2 font-bold cursor-pointer"><input type="checkbox" checked={visibleLedgers.general} onChange={(e)=>setVisibleLedgers({...visibleLedgers, general: e.target.checked})} />一般</label><label className="flex gap-2 font-bold cursor-pointer text-blue-700"><input type="checkbox" checked={visibleLedgers.land} onChange={(e)=>setVisibleLedgers({...visibleLedgers, land: e.target.checked})} />土地</label><label className="flex gap-2 font-bold cursor-pointer text-orange-700"><input type="checkbox" checked={visibleLedgers.building} onChange={(e)=>setVisibleLedgers({...visibleLedgers, building: e.target.checked})} />建物</label><label className="flex gap-2 font-bold cursor-pointer text-green-700"><input type="checkbox" checked={visibleLedgers.buyer} onChange={(e)=>setVisibleLedgers({...visibleLedgers, buyer: e.target.checked})} />買方</label></div>
+
+        {visibleLedgers.general && <TransactionTable data={groupedTransactions.general} typeLabel="一般專案收支" colorTheme="border-gray-200" subStats={stats.subTotals.general} setEditingTxId={setEditingTxId} setNewTx={setNewTx} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} />}
+        {visibleLedgers.land && <TransactionTable data={groupedTransactions.land} typeLabel="土地出售人帳目" colorTheme="border-blue-200" subStats={stats.subTotals.land} setEditingTxId={setEditingTxId} setNewTx={setNewTx} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} />}
+        {visibleLedgers.building && <TransactionTable data={groupedTransactions.building} typeLabel="建物出售人帳目" colorTheme="border-orange-200" subStats={stats.subTotals.building} setEditingTxId={setEditingTxId} setNewTx={setNewTx} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} />}
+        {visibleLedgers.buyer && <TransactionTable data={groupedTransactions.buyer} typeLabel="買受人帳目" colorTheme="border-green-200" subStats={stats.subTotals.buyer} setEditingTxId={setEditingTxId} setNewTx={setNewTx} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} />}
+
+        <div className={`p-8 rounded-3xl shadow-xl border ${editingTxId ? 'bg-orange-50' : 'bg-white'}`}>
+           <h3 className="font-black text-gray-800 mb-8 border-b pb-4">{editingTxId ? "修改" : "新增"}收支</h3>
+           <form onSubmit={saveTransaction} className="space-y-8">
+               <div className="grid grid-cols-1 md:grid-cols-6 gap-6 items-end">
+                   <div><label className="text-xs font-black block mb-2">日期 (民國 {newTx.date.split('-')[0]-1911} 年)</label><input type="date" className="w-full p-4 border rounded-xl" value={newTx.date} onChange={e=>setNewTx({...newTx, date:e.target.value})}/></div>
+                   <div><label className="text-xs font-black block mb-2">類型</label><select className="w-full p-4 border rounded-xl" value={newTx.type} onChange={e=>setNewTx({...newTx, type:e.target.value, category:CATEGORIES[e.target.value][0]})}>{/* Options */}<option value="expense">支出</option><option value="income">收入</option></select></div>
+                   <div><label className="text-xs font-black block mb-2">歸屬</label><select className="w-full p-4 border rounded-xl" value={newTx.linkedType||"general"} onChange={e=>setNewTx({...newTx, linkedType:e.target.value, linkedId:null})}><option value="general">一般</option><option value="land">土地</option><option value="building">建物</option><option value="buyer">買方</option></select></div>
+                   {newTx.linkedType !== 'general' && (<div><label className="text-xs font-black block mb-2">對象</label><select className="w-full p-4 border rounded-xl" value={newTx.linkedId||""} onChange={e=>setNewTx({...newTx, linkedId:Number(e.target.value)})}>{newTx.linkedType==='land'?lands.map(l=><option key={l.id} value={l.id}>{l.sellers.map(s=>s.name).join('/')}</option>):newTx.linkedType==='building'?buildings.map(b=><option key={b.id} value={b.id}>{b.sellers.map(s=>s.name).join('/')}</option>):buyers.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></div>)}
+                   <div><label className="text-xs font-black block mb-2">科目</label><select className="w-full p-4 border rounded-xl" value={newTx.category} onChange={e=>setNewTx({...newTx, category:e.target.value})}>{CATEGORIES[newTx.type].map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                   <div><label className="text-xs font-black block mb-2">金額</label><input type="number" className="w-full p-4 border rounded-xl font-bold" value={newTx.amount} onChange={e=>setNewTx({...newTx, amount:e.target.value})}/></div>
+               </div>
+               <div className="flex gap-4">
+                   <input className="flex-1 p-4 border rounded-xl" placeholder="備註" value={newTx.note} onChange={e=>setNewTx({...newTx, note:e.target.value})}/>
+                   <label className="cursor-pointer p-4 border-2 border-dashed rounded-xl flex items-center gap-2"><Camera className="w-5 h-5"/><input type="file" className="hidden" accept="image/*" onChange={(e)=>handleImageUploadGeneric(e.target.files[0], (res)=>setNewTx({...newTx, image: res}))} /></label>
+                   <button type="submit" className="px-8 py-4 rounded-xl bg-blue-600 text-white font-bold">{editingTxId ? "更新" : "錄入"}</button>
+               </div>
+           </form>
+        </div>
+    </div>
+  );
+};
+
+export default FinanceSection;
