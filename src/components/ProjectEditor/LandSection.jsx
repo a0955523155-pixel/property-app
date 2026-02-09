@@ -6,6 +6,10 @@ import LinkedLedger from '../LinkedLedger';
 const LandSection = ({ lands, setLands, transactions, setTransactions, landGrandTotal }) => {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  
+  // 預設日期
+  const today = new Date().toISOString().split('T')[0];
+
   const [tempLand, setTempLand] = useState({ section: "", items: [createEmptyLandItem()], sellers: [] });
   const [seller, setSeller] = useState({ name: "", phone: "", address: "" });
   const [expanded, setExpanded] = useState({});
@@ -23,7 +27,7 @@ const LandSection = ({ lands, setLands, transactions, setTransactions, landGrand
 
   const addSeller = () => { if (seller.name) { setTempLand({ ...tempLand, sellers: [...tempLand.sellers, { id: Date.now(), ...seller }] }); setSeller({ name: "", phone: "", address: "" }); } };
   const removeSeller = (id) => { if(confirm("確定移除此出售人？")) setTempLand({ ...tempLand, sellers: tempLand.sellers.filter(s => s.id !== id) }); };
-  const addItem = () => setTempLand({ ...tempLand, items: [...tempLand.items, { ...createEmptyLandItem(), date: new Date().toISOString().split('T')[0] }] });
+  const addItem = () => setTempLand({ ...tempLand, items: [...tempLand.items, { ...createEmptyLandItem(), date: today }] });
   const removeItem = (idx) => { if(confirm("確定刪除此地號行？")) setTempLand({ ...tempLand, items: tempLand.items.filter((_, i) => i !== idx) }); };
   
   const handleItemChange = (idx, field, value) => {
@@ -39,15 +43,30 @@ const LandSection = ({ lands, setLands, transactions, setTransactions, landGrand
     if (field==='detailPing' || field==='pricePerPing') { newItems[idx].subtotal=Math.round((Number(newItems[idx].detailPing)||0)*(Number(newItems[idx].pricePerPing)||0)).toString(); }
     setTempLand({ ...tempLand, items: newItems });
   };
+  
   const save = () => {
     if (tempLand.items.some(i => !i.lotNumber)) return alert("請填寫地號");
-    const data = { ...tempLand, holdingAreaM2: tempTotals.m2, holdingAreaPing: tempTotals.ping, totalPrice: tempTotals.price };
+    // ✅ 儲存前確保每筆資料都有日期
+    const itemsWithDate = tempLand.items.map(item => ({ ...item, date: item.date || today }));
+    const data = { ...tempLand, items: itemsWithDate, holdingAreaM2: tempTotals.m2, holdingAreaPing: tempTotals.ping, totalPrice: tempTotals.price };
+    
     if (editingId) setLands(lands.map(l => l.id === editingId ? { ...data, id: l.id } : l));
     else setLands([...lands, { ...data, id: Date.now() }]);
+    
     setTempLand({ section: "", items: [createEmptyLandItem()], sellers: [] }); setShowForm(false); setEditingId(null);
   };
-  const edit = (l) => { setEditingId(l.id); setTempLand({...l}); setShowForm(true); };
+  
+  const edit = (l) => { 
+      setEditingId(l.id); 
+      // ✅ 編輯舊資料時，補上預設日期
+      const fixedItems = l.items.map(item => ({ ...item, date: item.date || today }));
+      setTempLand({...l, items: fixedItems}); 
+      setShowForm(true); 
+  };
+  
   const del = (id) => { if(confirm("確定刪除此土地標的？")) setLands(lands.filter(l => l.id !== id)); };
+
+  const getROCYear = (dateStr) => dateStr ? dateStr.split('-')[0] - 1911 : "";
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -56,7 +75,7 @@ const LandSection = ({ lands, setLands, transactions, setTransactions, landGrand
       {showForm && (
         <div className="bg-white p-8 rounded-3xl shadow-xl border border-blue-100 animate-fadeIn">
            <div className="bg-gray-50 p-6 rounded-2xl mb-8 border border-gray-100"><h4 className="text-xs font-black text-gray-400 mb-4 uppercase tracking-[0.2em]">步驟 1: 土地出售人</h4><div className="flex flex-col md:flex-row gap-4 mb-4"><div className="flex-1"><input list="pre-sellers" placeholder="姓名" className="w-full p-3 border rounded-lg bg-white" value={seller.name} onChange={e=>setSeller({...seller, name:e.target.value})} /><datalist id="pre-sellers">{PREDEFINED_SELLERS.map(n=><option key={n} value={n}/>)}</datalist></div><input placeholder="電話" className="flex-1 p-3 border rounded-lg bg-white" value={seller.phone} onChange={e=>setSeller({...seller, phone:e.target.value})} /><input placeholder="地址" className="flex-1 p-3 border rounded-lg bg-white" value={seller.address} onChange={e=>setSeller({...seller, address:e.target.value})} /><button onClick={addSeller} className="bg-gray-800 text-white px-8 rounded-lg font-black">加入</button></div><div className="space-y-2">{tempLand.sellers.map(s => <div key={s.id} className="text-sm flex justify-between items-center p-3 bg-white border rounded-lg"><span>{s.name} | {s.phone} {s.address && `| ${s.address}`}</span><button onClick={()=>removeSeller(s.id)}><Trash2 className="w-4 h-4 text-red-400"/></button></div>)}</div></div>
-           <div className="mb-8"><div className="flex justify-between items-center mb-4"><h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">步驟 2: 地號規格</h4><input placeholder="地段 (如：仁武段)" className="p-2 border rounded" value={tempLand.section} onChange={e=>setTempLand({...tempLand, section: e.target.value})} /></div><div className="overflow-x-auto"><table className="w-full text-sm text-left border-collapse bg-white"><thead className="text-xs font-black uppercase text-gray-400"><tr className="border-b"><th className="p-3 w-20">戶號</th><th className="p-3 w-32">成交日期</th><th className="p-3 w-24">地號</th><th className="p-3 w-20">原始(m2)</th><th className="p-3">持分</th><th className="p-3 w-20">持分(m2)</th><th className="p-3 w-20">持分(坪)</th><th className="p-3 w-24">單價</th><th className="p-3 text-right">小計</th><th className="w-10"></th></tr></thead><tbody>{tempLand.items.map((item, idx) => (<tr key={item.id}><td className="p-2"><input className="w-full p-2 border rounded" value={item.unit} onChange={e=>handleItemChange(idx,'unit',e.target.value)}/></td><td className="p-2"><input type="date" className="w-full p-1 border rounded text-xs" value={item.date} onChange={e=>handleItemChange(idx,'date',e.target.value)}/><span className="text-[10px] text-gray-400">{item.date?`民國${item.date.split('-')[0]-1911}年`:''}</span></td><td className="p-2"><input className="w-full p-2 border rounded" value={item.lotNumber} onChange={e=>handleItemChange(idx,'lotNumber',e.target.value)}/></td><td className="p-2"><input type="number" className="w-full p-2 border rounded" value={item.areaM2} onChange={e=>handleItemChange(idx,'areaM2',e.target.value)}/></td><td className="p-2"><div className="flex items-center"><input className="w-10 p-1 border text-center" value={item.shareNum} onChange={e=>handleItemChange(idx,'shareNum',e.target.value)}/>/<input className="w-10 p-1 border text-center" value={item.shareDenom} onChange={e=>handleItemChange(idx,'shareDenom',e.target.value)}/></div></td><td className="p-2"><input className="w-full p-2 border rounded text-blue-600 font-bold" value={item.detailM2} onChange={e=>handleItemChange(idx,'detailM2',e.target.value)}/></td><td className="p-2"><input className="w-full p-2 border rounded text-blue-600 font-bold" value={item.detailPing} onChange={e=>handleItemChange(idx,'detailPing',e.target.value)}/></td><td className="p-2"><input type="number" className="w-full p-2 border rounded" value={item.pricePerPing} onChange={e=>handleItemChange(idx,'pricePerPing',e.target.value)}/></td><td className="p-2"><input type="number" className="w-full p-2 border rounded text-right text-blue-600 font-bold" value={item.subtotal} onChange={e=>handleItemChange(idx,'subtotal',e.target.value)}/></td><td className="p-2"><button onClick={()=>removeItem(idx)} className="text-red-400"><Minus className="w-4 h-4"/></button></td></tr>))}</tbody><tfoot><tr><td colSpan="6" className="text-right p-3">本筆合計:</td><td className="text-center p-3">{tempTotals.m2}</td><td className="text-center p-3">{tempTotals.ping}</td><td></td><td className="text-right p-3 text-blue-600">${Number(tempTotals.price).toLocaleString()}</td></tr></tfoot></table><button onClick={addItem} className="mt-4 w-full py-3 border-2 border-dashed rounded-xl text-blue-500 font-bold text-sm"><Plus className="w-5 h-5"/> 增加地號</button></div></div>
+           <div className="mb-8"><div className="flex justify-between items-center mb-4"><h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em]">步驟 2: 地號規格</h4><input placeholder="地段 (如：仁武段)" className="p-2 border rounded" value={tempLand.section} onChange={e=>setTempLand({...tempLand, section: e.target.value})} /></div><div className="overflow-x-auto"><table className="w-full text-sm text-left border-collapse bg-white"><thead className="text-xs font-black uppercase text-gray-400"><tr className="border-b"><th className="p-3 w-20">戶號</th><th className="p-3 w-32">成交日期</th><th className="p-3 w-24">地號</th><th className="p-3 w-20">原始(m2)</th><th className="p-3">持分</th><th className="p-3 w-20">持分(m2)</th><th className="p-3 w-20">持分(坪)</th><th className="p-3 w-24">單價</th><th className="p-3 text-right">小計</th><th className="w-10"></th></tr></thead><tbody>{tempLand.items.map((item, idx) => (<tr key={item.id}><td className="p-2"><input className="w-full p-2 border rounded" value={item.unit} onChange={e=>handleItemChange(idx,'unit',e.target.value)}/></td><td className="p-2"><input type="date" className="w-full p-1 border rounded text-xs" value={item.date} onChange={e=>handleItemChange(idx,'date',e.target.value)}/><span className="text-[10px] text-gray-400">{getROCYear(item.date) ? `民國${getROCYear(item.date)}年`:''}</span></td><td className="p-2"><input className="w-full p-2 border rounded" value={item.lotNumber} onChange={e=>handleItemChange(idx,'lotNumber',e.target.value)}/></td><td className="p-2"><input type="number" className="w-full p-2 border rounded" value={item.areaM2} onChange={e=>handleItemChange(idx,'areaM2',e.target.value)}/></td><td className="p-2"><div className="flex items-center"><input className="w-10 p-1 border text-center" value={item.shareNum} onChange={e=>handleItemChange(idx,'shareNum',e.target.value)}/>/<input className="w-10 p-1 border text-center" value={item.shareDenom} onChange={e=>handleItemChange(idx,'shareDenom',e.target.value)}/></div></td><td className="p-2"><input className="w-full p-2 border rounded text-blue-600 font-bold" value={item.detailM2} onChange={e=>handleItemChange(idx,'detailM2',e.target.value)}/></td><td className="p-2"><input className="w-full p-2 border rounded text-blue-600 font-bold" value={item.detailPing} onChange={e=>handleItemChange(idx,'detailPing',e.target.value)}/></td><td className="p-2"><input type="number" className="w-full p-2 border rounded" value={item.pricePerPing} onChange={e=>handleItemChange(idx,'pricePerPing',e.target.value)}/></td><td className="p-2"><input type="number" className="w-full p-2 border rounded text-right text-blue-600 font-bold" value={item.subtotal} onChange={e=>handleItemChange(idx,'subtotal',e.target.value)}/></td><td className="p-2"><button onClick={()=>removeItem(idx)} className="text-red-400"><Minus className="w-4 h-4"/></button></td></tr>))}</tbody><tfoot><tr><td colSpan="6" className="text-right p-3">本筆合計:</td><td className="text-center p-3">{tempTotals.m2}</td><td className="text-center p-3">{tempTotals.ping}</td><td></td><td className="text-right p-3 text-blue-600">${Number(tempTotals.price).toLocaleString()}</td></tr></tfoot></table><button onClick={addItem} className="mt-4 w-full py-3 border-2 border-dashed rounded-xl text-blue-500 font-bold text-sm"><Plus className="w-5 h-5"/> 增加地號</button></div></div>
            <button onClick={save} className="w-full py-5 rounded-2xl text-white font-black bg-blue-600 shadow-2xl hover:bg-blue-700 tracking-widest text-lg">儲存土地標的</button>
         </div>
       )}

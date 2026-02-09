@@ -1,164 +1,188 @@
 import React from 'react';
 import { toROCDate, toPing } from '../../utils/helpers';
 
+// ✅ 標籤樣式
+const Label = ({ children }) => (
+  <span className="inline-block bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded mr-1.5 text-xs font-bold whitespace-nowrap align-middle">
+    {children}
+  </span>
+);
+
 const PrintView = ({ 
-  projectName, printConfig, projectTeams, landGrandTotal, 
+  projectName, printConfig, projectTeams, 
+  landGrandTotal, buildingGrandTotal, 
   buyers, sortedBuyers, lands, visibleLandIds, 
-  buildings, sortedBuildings, handoverData, 
+  buildings, sortedBuildings, 
+  handoverData, visibleHandoverUnits, 
   allLotNumbers, allBuildingInfo, 
   visibleLedgers, groupedTransactions, stats, 
   requisitions, groupedRequisitions 
 }) => {
   return (
-    <div className="hidden print:block print:p-8 text-sm font-serif text-gray-900">
-        <h1 className="text-3xl font-black mb-2 text-gray-800">專案管理報表: {projectName}</h1>
-        <p className="text-sm text-gray-500 mb-8 border-b-2 border-gray-800 pb-2">列印日期: {toROCDate(new Date())}</p>
+    <div className="hidden print:block print:p-8 font-sans text-xs text-gray-900 leading-snug">
         
-        {/* Page 1: 團隊 & 買受人 */}
-        <div className="print-section">
-           {printConfig.team && (
-             <section className="mb-8 break-inside-avoid">
-               <h2 className="text-lg font-bold border-l-4 border-gray-800 pl-2 mb-4">專案團隊資訊</h2>
-               <table className="w-full border-collapse border border-gray-400 mb-4">
-                 <thead>
-                   <tr className="bg-gray-100 print:bg-gray-200">
-                     <th className="border border-gray-400 p-2 whitespace-nowrap">歸屬戶號</th>
-                     <th className="border border-gray-400 p-2 whitespace-nowrap">仲介公司</th>
-                     <th className="border border-gray-400 p-2 whitespace-nowrap">經紀人</th>
-                     <th className="border border-gray-400 p-2 whitespace-nowrap">開發業務</th>
-                     <th className="border border-gray-400 p-2 whitespace-nowrap">行銷業務</th>
-                     <th className="border border-gray-400 p-2 whitespace-nowrap">代書</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {projectTeams.map(t => (
-                     <tr key={t.id}>
-                       <td className="border border-gray-400 p-2 whitespace-nowrap text-center font-bold">{t.unit}</td>
-                       <td className="border border-gray-400 p-2 whitespace-nowrap">{t.agency}</td>
-                       <td className="border border-gray-400 p-2 whitespace-nowrap">{t.broker}</td>
-                       <td className="border border-gray-400 p-2 whitespace-nowrap">{t.developer}</td>
-                       <td className="border border-gray-400 p-2 whitespace-nowrap">{t.marketer}</td>
-                       <td className="border border-gray-400 p-2 whitespace-nowrap">{t.scrivener}</td>
-                     </tr>
-                   ))}
-                 </tbody>
-               </table>
-             </section>
-           )}
-           
-           {printConfig.buyers && (
-             <section className="mb-8 break-inside-avoid">
-               <h2 className="text-lg font-bold border-l-4 border-gray-800 pl-2 mb-4">買受人資訊</h2>
-               {buyers.length > 0 ? (
-                 <table className="w-full border-collapse border border-gray-400">
-                   <thead>
-                     <tr className="bg-gray-100 print:bg-gray-200">
-                       <th className="border border-gray-400 p-2 w-16 whitespace-nowrap">戶號</th>
-                       <th className="border border-gray-400 p-2 w-24 whitespace-nowrap">姓名</th>
-                       <th className="border border-gray-400 p-2 w-32 whitespace-nowrap">電話</th>
-                       <th className="border border-gray-400 p-2 whitespace-nowrap">地址</th>
-                       <th className="border border-gray-400 p-2 w-24 text-right whitespace-nowrap">土地合約價</th>
-                       <th className="border border-gray-400 p-2 w-24 text-right whitespace-nowrap">建物合約價</th>
-                       <th className="border border-gray-400 p-2 w-28 text-right whitespace-nowrap">合約總價</th>
-                     </tr>
-                   </thead>
-                   <tbody>
-                     {sortedBuyers.map(b => (
-                       <tr key={b.id}>
-                         <td className="border border-gray-400 p-2 text-center font-bold whitespace-nowrap">{b.unit}</td>
-                         <td className="border border-gray-400 p-2 whitespace-nowrap">{b.name}</td>
-                         <td className="border border-gray-400 p-2 whitespace-nowrap">{b.phone}</td>
-                         <td className="border border-gray-400 p-2 text-xs whitespace-nowrap">{b.address}</td>
-                         <td className="border border-gray-400 p-2 text-right text-gray-600 whitespace-nowrap">${Number(b.landPrice).toLocaleString()}</td>
-                         <td className="border border-gray-400 p-2 text-right text-gray-600 whitespace-nowrap">${Number(b.buildingPrice).toLocaleString()}</td>
-                         <td className="border border-gray-400 p-2 text-right font-bold text-black whitespace-nowrap">${Number(b.totalPrice).toLocaleString()}</td>
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-               ) : <div className="text-gray-400 italic border p-4 text-center">無買受人資料</div>}
-             </section>
-           )}
+        {/* ==================== PAGE 1: 封面與總結算 ==================== */}
+        <div className="print-section-page">
+            <h1 className="text-3xl font-black mb-4 text-gray-800">專案管理報表: {projectName}</h1>
+            <p className="text-sm text-gray-500 mb-8 border-b-4 border-gray-800 pb-2">列印日期: {toROCDate(new Date())}</p>
+
+            {/* 1. 全案土地總結算 */}
+            {printConfig.lands && (
+                <section className="mb-8">
+                    <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-3">全案土地總結算</h2>
+                    <div className="grid grid-cols-3 gap-4 border-2 border-gray-400 p-4 text-center bg-gray-50">
+                        <div><span className="block text-xs text-gray-500 font-bold mb-1">總持有面積 (㎡)</span><span className="text-2xl font-black">{landGrandTotal.m2}</span></div>
+                        <div><span className="block text-xs text-gray-500 font-bold mb-1">總持有坪數</span><span className="text-2xl font-black">{landGrandTotal.ping}</span></div>
+                        <div><span className="block text-xs text-gray-500 font-bold mb-1">總金額 ($)</span><span className="text-2xl font-black">${Number(landGrandTotal.price).toLocaleString()}</span></div>
+                    </div>
+                </section>
+            )}
+
+            {/* 2. 全案建物總結算 */}
+            {printConfig.buildings && (
+                <section className="mb-8">
+                    <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-3">全案建物總結算</h2>
+                    <div className="grid grid-cols-3 gap-4 border-2 border-gray-400 p-4 text-center bg-gray-50">
+                        <div><span className="block text-xs text-gray-500 font-bold mb-1">總面積 (㎡)</span><span className="text-2xl font-black">{buildingGrandTotal.m2}</span></div>
+                        <div><span className="block text-xs text-gray-500 font-bold mb-1">總坪數</span><span className="text-2xl font-black">{buildingGrandTotal.ping}</span></div>
+                        <div><span className="block text-xs text-gray-500 font-bold mb-1">總金額 ($)</span><span className="text-2xl font-black">${Number(buildingGrandTotal.price).toLocaleString()}</span></div>
+                    </div>
+                </section>
+            )}
         </div>
         
-        {/* Page 2: 土地 (持分垂直顯示) */}
-        {printConfig.lands && (
-           <div className="print-section">
-             {/* 全案土地總結算 */}
-             <section className="mb-8 break-inside-avoid">
-               <h2 className="text-lg font-bold border-l-4 border-gray-800 pl-2 mb-4">全案土地總結算</h2>
-               <div className="grid grid-cols-3 gap-4 border border-gray-400 p-4 text-center bg-gray-50">
-                 <div>
-                   <span className="block text-xs text-gray-500 font-bold mb-1">總持有面積 (㎡)</span>
-                   <span className="text-xl font-black">{landGrandTotal.m2}</span>
-                 </div>
-                 <div>
-                   <span className="block text-xs text-gray-500 font-bold mb-1">總持有坪數</span>
-                   <span className="text-xl font-black">{landGrandTotal.ping}</span>
-                 </div>
-                 <div>
-                   <span className="block text-xs text-gray-500 font-bold mb-1">總金額 ($)</span>
-                   <span className="text-xl font-black">${Number(landGrandTotal.price).toLocaleString()}</span>
-                 </div>
-               </div>
-             </section>
-             
-             <h2 className="text-lg font-bold border-l-4 border-gray-800 pl-2 mb-4">土地標的詳細清單</h2>
-             {lands.length > 0 ? lands.filter(l => visibleLandIds.includes(l.id)).map(l => (
-               <div key={l.id} className="mb-6 border border-gray-400 break-inside-avoid">
-                 <div className="bg-gray-100 print:bg-gray-200 p-2 font-bold text-sm flex justify-between border-b border-gray-400">
-                   <span>出售人: {l.sellers.map(s=>s.name).join(', ')} {l.sellers[0]?.address && `(${l.sellers[0].address})`}</span>
-                   <span>地段: {l.section}</span>
-                 </div>
-                 <table className="w-full text-sm border-collapse">
-                    <thead>
+        {/* ==================== PAGE 2: 專案團隊 ==================== */}
+        {printConfig.team && (
+             <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
+               <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">專案團隊資訊</h2>
+               <table className="w-full border-collapse border-2 border-black table-fixed text-xs">
+                 {projectTeams.map(t => (
+                    <tbody key={t.id} className="break-inside-avoid border-b-2 border-black">
                         <tr className="bg-gray-50 border-b border-gray-300">
-                            <th className="border-r border-gray-300 p-2 w-12 whitespace-nowrap">戶號</th>
-                            <th className="border-r border-gray-300 p-2 w-24 whitespace-nowrap">成交日期</th>
-                            <th className="border-r border-gray-300 p-2 w-20 whitespace-nowrap">地號</th>
-                            <th className="border-r border-gray-300 p-2 w-20 whitespace-nowrap">原始(m2)</th>
-                            <th className="border-r border-gray-300 p-2 w-24 whitespace-nowrap">持分</th>
-                            <th className="border-r border-gray-300 p-2 whitespace-nowrap">持分(m2)</th>
-                            <th className="border-r border-gray-300 p-2 whitespace-nowrap">持分(坪)</th>
-                            <th className="border-r border-gray-300 p-2 whitespace-nowrap">單價</th>
-                            <th className="p-2 text-right whitespace-nowrap">小計</th>
+                            <td rowSpan={3} className="border-r border-black p-2 font-black text-center align-middle text-xl w-[50px] bg-gray-100">{t.unit}</td>
+                            <td className="p-2 border-r border-gray-300 w-1/2"><Label>仲介公司</Label><span className="font-bold">{t.agency}</span></td>
+                            <td className="p-2 w-1/2"><Label>經紀人</Label><span className="font-bold">{t.broker}</span></td>
+                        </tr>
+                        <tr className="border-b border-gray-300">
+                            <td className="p-2 border-r border-gray-300">
+                                <Label>開發業務</Label><span>{t.developer}</span>
+                                <div className="mt-0.5 ml-1 text-gray-500 text-[10px]">{t.developerType} {t.developerNo}</div>
+                            </td>
+                            <td className="p-2">
+                                <Label>行銷業務</Label><span>{t.marketer}</span>
+                                <div className="mt-0.5 ml-1 text-gray-500 text-[10px]">單據: {t.marketerNo}</div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td colSpan={2} className="p-2"><Label>承辦代書</Label><span className="font-bold">{t.scrivener}</span></td>
+                        </tr>
+                    </tbody>
+                 ))}
+               </table>
+             </div>
+        )}
+           
+        {/* ==================== PAGE 3: 買受人資訊 ==================== */}
+        {printConfig.buyers && (
+             <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
+               <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">買受人資訊</h2>
+               {buyers.length > 0 ? (
+                 <table className="w-full border-collapse border-2 border-black table-fixed text-xs">
+                   {sortedBuyers.map(b => (
+                     <tbody key={b.id} className="break-inside-avoid border-b-2 border-black">
+                        <tr className="bg-gray-50 border-b border-gray-300">
+                            <td rowSpan={3} className="border-r border-black p-2 font-black text-center align-middle text-xl w-[50px] bg-gray-100">{b.unit}</td>
+                            <td className="p-2 border-r border-gray-300 w-1/2"><Label>買方姓名</Label><span className="font-bold text-sm align-middle">{b.name}</span></td>
+                            <td className="p-2 w-1/2"><Label>聯絡電話</Label><span className="font-mono text-sm align-middle">{b.phone}</span></td>
+                        </tr>
+                        <tr className="border-b border-gray-300">
+                            <td colSpan={2} className="p-2"><Label>通訊地址</Label><span className="font-bold align-middle">{b.address}</span></td>
+                        </tr>
+                        <tr>
+                            <td colSpan={2} className="p-0">
+                                <div className="grid grid-cols-3 divide-x divide-gray-300">
+                                    <div className="p-2"><Label>土地價款</Label><span className="font-mono block mt-0.5 text-right text-sm">${Number(b.landPrice).toLocaleString()}</span></div>
+                                    <div className="p-2"><Label>建物價款</Label><span className="font-mono block mt-0.5 text-right text-sm">${Number(b.buildingPrice).toLocaleString()}</span></div>
+                                    <div className="p-2 bg-yellow-50"><Label>合約總價</Label><span className="font-black block mt-0.5 text-right text-base">${Number(b.totalPrice).toLocaleString()}</span></div>
+                                </div>
+                            </td>
+                        </tr>
+                     </tbody>
+                   ))}
+                 </table>
+               ) : <div className="text-gray-400 italic border p-4 text-center">無買受人資料</div>}
+             </div>
+        )}
+        
+        {/* ==================== PAGE 4: 土地標的 (✅ 修正：標題銜接 + 合計位置 + 戶號縮小) ==================== */}
+        {printConfig.lands && (
+           <div className="print-section-page">
+             {/* 標題強制分頁，確保它在新頁面的最上方 */}
+             <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4 break-before-page" style={{ pageBreakBefore: 'always' }}>土地標的詳細清單</h2>
+             
+             {lands.length > 0 ? lands.filter(l => visibleLandIds.includes(l.id)).map((l, index) => (
+               // ✅ 修正邏輯：第一筆(index 0)不分頁(直接接標題)，第二筆之後才分頁
+               <div key={l.id} style={index === 0 ? {} : { pageBreakBefore: 'always' }} className="mb-8">
+                 
+                 <table className="w-full border-collapse table-fixed text-xs">
+                    <thead>
+                        <tr>
+                            <th colSpan="3" className="border-2 border-black bg-gray-800 text-white p-3 text-left">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-lg font-black tracking-wide">
+                                        出售人: {l.sellers.map(s=>s.name).join(', ')} 
+                                        {l.sellers[0]?.address && <span className="text-xs font-normal ml-2 opacity-80">({l.sellers[0].address})</span>}
+                                    </span>
+                                    <div className="text-right">
+                                        <div className="text-sm font-bold text-yellow-400">地段: {l.section}</div>
+                                        <div className="text-[10px] font-light opacity-60 mt-0.5">(若跨頁請承接上頁)</div>
+                                    </div>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
-                    <tbody>{l.items.map(item => {
+
+                    {l.items.map(item => {
                        const rawM2 = Number(item.areaM2)||0;
                        const num = Number(item.shareNum)||0;
                        const denom = Number(item.shareDenom)||1;
                        const hM2 = item.detailM2 || (rawM2*(num/denom)).toFixed(3);
                        const hPing = item.detailPing || toPing(hM2).toFixed(3);
+                       
                        return (
-                         <tr key={item.id} className="border-b border-gray-200">
-                           <td className="border-r border-gray-300 p-2 text-center font-bold whitespace-nowrap">{item.unit}</td>
-                           <td className="border-r border-gray-300 p-2 text-xs whitespace-nowrap">{toROCDate(item.date)}</td>
-                           <td className="border-r border-gray-300 p-2 font-mono whitespace-nowrap">{item.lotNumber}</td>
-                           <td className="border-r border-gray-300 p-2 text-center whitespace-nowrap">{item.areaM2}</td>
-                           
-                           {/* ✅ 修正：垂直排列持分 (分子上 / 分母下) */}
-                           <td className="border-r border-gray-300 p-1 whitespace-nowrap text-center align-middle">
-                               <div className="inline-flex flex-col items-center justify-center leading-none text-xs">
-                                   <span className="border-b border-black pb-[1px] mb-[1px] w-full text-center block">{num}</span>
-                                   <span className="w-full text-center block">{denom}</span>
-                               </div>
-                           </td>
-
-                           <td className="border-r border-gray-300 p-2 text-center whitespace-nowrap">{hM2}</td>
-                           <td className="border-r border-gray-300 p-2 text-center whitespace-nowrap">{hPing}</td>
-                           <td className="border-r border-gray-300 p-2 text-center whitespace-nowrap">{item.pricePerPing}</td>
-                           <td className="p-2 text-right whitespace-nowrap font-mono">${Number(item.subtotal).toLocaleString()}</td>
-                         </tr>
+                         <tbody key={item.id} className="border-2 border-black border-t-0 break-inside-avoid">
+                            <tr className="bg-gray-50 border-b border-gray-300">
+                                {/* ✅ 戶號再縮小：w-[25px] */}
+                                <td rowSpan={3} className="border-r border-black p-2 font-black text-center align-middle text-lg w-[25px] bg-gray-100">{item.unit}</td>
+                                <td className="p-2 border-r border-gray-300 w-1/2"><Label>成交日期</Label><span className="font-mono align-middle text-sm">{toROCDate(item.date)}</span></td>
+                                <td className="p-2 w-1/2"><Label>地號</Label><span className="font-mono font-bold bg-white border px-1.5 py-0.5 rounded text-sm align-middle">{item.lotNumber}</span></td>
+                            </tr>
+                            <tr className="border-b border-gray-300">
+                                <td colSpan={2} className="p-0">
+                                    <div className="grid grid-cols-3 divide-x divide-gray-300">
+                                        <div className="p-2"><Label>原始面積</Label><span className="font-mono align-middle">{item.areaM2} m²</span></div>
+                                        <div className="p-2 flex items-center"><Label>持分比例</Label><div className="inline-flex flex-col items-center justify-center leading-none text-[10px] ml-1"><span className="border-b border-black pb-[1px] w-full text-center">{num}</span><span className="w-full text-center">{denom}</span></div></div>
+                                        <div className="p-2 bg-yellow-50"><Label>持分面積</Label><div className="font-bold inline-block align-middle">{hM2} m² <span className="text-gray-500 text-[10px] font-normal">({hPing}坪)</span></div></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td className="p-2 border-r border-gray-300"><Label>每坪單價</Label><span className="font-mono align-middle">${Number(item.pricePerPing).toLocaleString()}</span></td>
+                                <td className="p-2 text-right"><Label>本筆小計</Label><span className="font-black text-base align-middle">${Number(item.subtotal).toLocaleString()}</span></td>
+                            </tr>
+                         </tbody>
                        )
                     })}
-                    <tr className="bg-gray-100 font-bold border-t border-gray-400">
-                          <td colSpan="6" className="p-2 text-right whitespace-nowrap border-r border-gray-300">本筆小計:</td>
-                          <td className="p-2 text-center whitespace-nowrap border-r border-gray-300">{Number(l.holdingAreaM2).toFixed(3)}</td>
-                          <td className="p-2 text-center whitespace-nowrap border-r border-gray-300">{Number(l.holdingAreaPing).toFixed(3)}</td>
-                          <td className="p-2 border-r border-gray-300"></td>
-                          <td className="p-2 text-right whitespace-nowrap">${Number(l.totalPrice).toLocaleString()}</td>
-                    </tr>
+
+                    {/* ✅ 合計：直接做為表格的最後一行 (tbody)，確保只顯示在該出售人資料的底部 */}
+                    <tbody className="border-2 border-t-0 border-black bg-gray-100 font-bold break-inside-avoid">
+                        <tr>
+                            <td colSpan="3" className="p-3 text-right">
+                                <span className="mr-6">合計持分面積: {Number(l.holdingAreaM2).toFixed(3)} m²</span>
+                                <span className="mr-6">合計持分坪數: {Number(l.holdingAreaPing).toFixed(3)} 坪</span>
+                                <span className="text-xl border-l-4 border-gray-400 pl-4">總價: ${Number(l.totalPrice).toLocaleString()}</span>
+                            </td>
+                        </tr>
                     </tbody>
                  </table>
                </div>
@@ -166,70 +190,83 @@ const PrintView = ({
            </div>
         )}
 
-        {/* Page 3: 建物 (戶號在前) */}
-        <div className="print-section">
-            {printConfig.buildings && (
-              <section className="mb-8 break-inside-avoid">
-                <h2 className="text-lg font-bold border-l-4 border-gray-800 pl-2 mb-4">建物標的</h2>
+        {/* ==================== PAGE 5: 建物標的 (✅ 建照/使照 絕對置中) ==================== */}
+        {printConfig.buildings && (
+              <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
+                <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">建物標的清單</h2>
                 {buildings.length > 0 ? (
-                  <table className="w-full border-collapse border border-gray-400">
-                    <thead>
-                      <tr className="bg-gray-100 print:bg-gray-200">
-                        <th className="border border-gray-400 p-2 w-12 whitespace-nowrap">戶號</th>
-                        <th className="border border-gray-400 p-2 w-24 whitespace-nowrap">成交日期</th>
-                        <th className="border border-gray-400 p-2 whitespace-nowrap">出售人</th>
-                        <th className="border border-gray-400 p-2 whitespace-nowrap">建照</th>
-                        <th className="border border-gray-400 p-2 whitespace-nowrap">地址</th>
-                        <th className="border border-gray-400 p-2 whitespace-nowrap">建號</th>
-                        <th className="border border-gray-400 p-2 whitespace-nowrap">面積(m2)</th>
-                        <th className="border border-gray-400 p-2 whitespace-nowrap">總金額</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedBuildings.map(b => (
-                        <tr key={b.id}>
-                          <td className="border border-gray-400 p-2 font-bold text-center whitespace-nowrap">{b.unit}</td>
-                          <td className="border border-gray-400 p-2 text-xs whitespace-nowrap">{toROCDate(b.saleDate)}</td>
-                          <td className="border border-gray-400 p-2 whitespace-nowrap">{b.sellers.map(s => s.name).join(', ')}</td>
-                          <td className="border border-gray-400 p-2 whitespace-nowrap">{b.permitNumber}</td>
-                          <td className="border border-gray-400 p-2 whitespace-nowrap">{b.address}</td>
-                          <td className="border border-gray-400 p-2 whitespace-nowrap">{b.buildNumber}</td>
-                          <td className="border border-gray-400 p-2 whitespace-nowrap">{b.areaM2}</td>
-                          <td className="border border-gray-400 p-2 whitespace-nowrap text-right">${Number(b.totalPrice).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
+                  <table className="w-full border-collapse border-2 border-black table-fixed text-xs">
+                    {sortedBuildings.map(b => (
+                        <tbody key={b.id} className="break-inside-avoid border-b-2 border-black">
+                            <tr className="bg-gray-50 border-b border-gray-300">
+                                <td rowSpan={4} className="border-r border-black p-2 font-black text-center align-middle text-xl w-[50px] bg-gray-100">{b.unit}</td>
+                                <td className="p-2 border-r border-gray-300 w-[160px]"><Label>成交日期</Label><span className="font-mono text-sm align-middle">{toROCDate(b.saleDate)}</span></td>
+                                <td className="p-2 w-auto" colSpan={2}><Label>出售人</Label><span className="font-bold text-sm align-middle">{b.sellers.map(s => s.name).join(', ')}</span></td>
+                            </tr>
+                            <tr className="border-b border-gray-300">
+                                <td colSpan={3} className="p-2"><Label>門牌地址</Label><span className="font-bold text-black text-sm align-middle">{b.address}</span></td>
+                            </tr>
+                            <tr className="border-b border-gray-300">
+                                {/* ✅ 使用 Flex w-1/2 確保分隔線置中 */}
+                                <td colSpan={3} className="p-0">
+                                    <div className="flex w-full">
+                                        <div className="w-1/2 p-2 border-r border-gray-300 flex items-center">
+                                            <Label>建照號碼</Label><span className="font-mono text-xs break-all">{b.permitNumber}</span>
+                                        </div>
+                                        <div className="w-1/2 p-2 flex items-center">
+                                            <Label>使照號碼</Label><span className="font-mono text-xs break-all">{b.license}</span>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td className="p-2 border-r border-gray-300"><Label>建號</Label><span className="font-mono font-bold text-sm align-middle">{b.buildNumber}</span></td>
+                                <td className="p-2 border-r border-gray-300"><Label>面積</Label><span className="font-mono align-middle">{b.areaM2} m²</span></td>
+                                <td className="p-2 text-right"><Label>總金額</Label><span className="font-black text-base align-middle">${Number(b.totalPrice).toLocaleString()}</span></td>
+                            </tr>
+                        </tbody>
+                    ))}
                   </table>
                 ) : <div className="text-gray-400 italic border p-4 text-center">無建物資料</div>}
-              </section>
-            )}
+              </div>
+        )}
+
+        {/* ... 交屋、財務、請款單 (保持原樣) ... */}
+        {/* ==================== PAGE 6+: 交屋點交 ==================== */}
+        {printConfig.handover && handoverData && handoverData.length > 0 && (
+            <>
+                {handoverData
+                    .filter(h => visibleHandoverUnits.includes(h.unit))
+                    .sort((a, b) => (a.unit || "").localeCompare(b.unit || "", "zh-Hant", { numeric: true }))
+                    .map(h => (
+                    <div key={h.id} className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
+                        <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">交屋點交確認單 - 戶號: {h.unit}</h2>
+                        <div className="grid grid-cols-2 gap-0 border-2 border-gray-400 text-sm">
+                            <div className="p-4 border-r border-b border-gray-400 flex justify-between"><span className="font-bold">點交日期</span> <span>{toROCDate(h.handoverDate)}</span></div>
+                            <div className="p-4 border-b border-gray-400 flex justify-between"><span className="font-bold">捲門遙控器</span> <span>{h.remotes} 顆</span></div>
+                            <div className="p-4 border-r border-b border-gray-400 flex justify-between"><span className="font-bold">小門鑰匙(前)</span> <span>{h.keysFront} 支</span></div>
+                            <div className="p-4 border-b border-gray-400 flex justify-between"><span className="font-bold">小門鑰匙(後)</span> <span>{h.keysBack} 支</span></div>
+                            <div className="p-4 border-r border-b border-gray-400 flex justify-between"><span className="font-bold">廠房保固書</span> <span>{h.warranty ? "有" : "無"}</span></div>
+                            <div className="p-4 border-b border-gray-400 flex justify-between"><span className="font-bold">廠房竣工圖</span> <span>{h.drawings ? "有" : "無"}</span></div>
+                            <div className="p-4 border-r border-b border-gray-400 flex justify-between"><span className="font-bold">使用執照正本</span> <span>{h.originalPermit ? "有" : "無"}</span></div>
+                            <div className="p-4 border-b border-gray-400 flex justify-between"></div>
+                            <div className="p-4 border-r border-gray-400 flex justify-between"><span className="font-bold">電單號碼</span> <span>{h.electricityBill}</span></div>
+                            <div className="p-4 flex justify-between"><span className="font-bold">水單號碼</span> <span>{h.waterBill}</span></div>
+                        </div>
+                        <div className="mt-24 flex justify-around px-8">
+                            <div className="text-center"><p className="mb-4 text-gray-500 text-base">建商簽章</p><div className="border-b-2 border-black w-56 h-8"></div></div>
+                            <div className="text-center"><p className="mb-4 text-gray-500 text-base">買方簽章</p><div className="border-b-2 border-black w-56 h-8"></div></div>
+                        </div>
+                    </div>
+                ))}
+            </>
+        )}
             
-            {/* 交屋 (不變) */}
-            {printConfig.handover && (
-              <section className="mb-8 break-inside-avoid">
-                <h2 className="text-lg font-bold border-l-4 border-gray-800 pl-2 mb-4">交屋點交確認</h2>
-                {handoverData ? (
-                  <div className="grid grid-cols-2 gap-0 border border-gray-400">
-                    <div className="p-2 border-r border-b border-gray-400">點交日期: {toROCDate(handoverData.handoverDate)}</div>
-                    <div className="p-2 border-b border-gray-400">遙控器: {handoverData.remotes} 顆</div>
-                    <div className="p-2 border-r border-b border-gray-400">小門鑰匙(前): {handoverData.keysFront} 支</div>
-                    <div className="p-2 border-b border-gray-400">小門鑰匙(後): {handoverData.keysBack} 支</div>
-                    <div className="p-2 border-r border-b border-gray-400">保固書: {handoverData.warranty ? "有" : "無"}</div>
-                    <div className="p-2 border-b border-gray-400">竣工圖: {handoverData.drawings ? "有" : "無"}</div>
-                    <div className="p-2 border-r border-b border-gray-400">使照正本: {handoverData.originalPermit ? "有" : "無"}</div>
-                    <div className="p-2 border-b border-gray-400">電單號碼: {handoverData.electricityBill}</div>
-                    <div className="p-2 border-r border-gray-400">水單號碼: {handoverData.waterBill}</div>
-                    <div className="p-2"></div>
-                  </div>
-                ) : <div className="text-gray-400 italic border p-4 text-center">無交屋資料</div>}
-              </section>
-            )}
-            
-            {/* 財務收支 (不變，保持紅藍) */}
-            {printConfig.finance && (
-              <section className="mb-8">
-                <h2 className="text-lg font-bold border-l-4 border-gray-800 pl-2 mb-4">收支明細</h2>
-                <div className="space-y-4">
+        {/* ==================== PAGE 7: 財務收支 ==================== */}
+        {printConfig.finance && (
+            <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
+                <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">收支明細</h2>
+                <div className="space-y-6">
                   {['general', 'land', 'building', 'buyer'].map(type => {
                       if (!visibleLedgers[type]) return null;
                       const subData = groupedTransactions[type];
@@ -239,29 +276,29 @@ const PrintView = ({
                       const net = (subStats?.income || 0) - (subStats?.expense || 0);
 
                       return (
-                        <div key={type} className="mb-4 break-inside-avoid">
-                          <h3 className="font-bold text-sm bg-gray-200 p-1 border border-gray-400 border-b-0">{label}</h3>
-                          <table className="w-full text-xs border-collapse border border-gray-400">
+                        <div key={type} className="mb-6 break-inside-avoid">
+                          <h3 className="font-bold text-base bg-gray-200 p-2 border-2 border-gray-400 border-b-0">{label}</h3>
+                          <table className="w-full text-xs border-collapse border-2 border-gray-400">
                             <thead>
                               <tr className="bg-gray-100">
-                                <th className="border border-gray-400 p-2 whitespace-nowrap">日期</th>
-                                <th className="border border-gray-400 p-2 whitespace-nowrap">類型</th>
-                                <th className="border border-gray-400 p-2 whitespace-nowrap">對象/備註</th>
-                                <th className="border border-gray-400 p-2 text-right whitespace-nowrap">金額</th>
+                                <th className="border border-gray-400 p-2 w-24 whitespace-nowrap">日期</th>
+                                <th className="border border-gray-400 p-2 w-20 whitespace-nowrap">類型</th>
+                                <th className="border border-gray-400 p-2 whitespace-normal">對象/備註</th>
+                                <th className="border border-gray-400 p-2 w-24 text-right whitespace-nowrap">金額</th>
                               </tr>
                             </thead>
                             <tbody>
                                 {subData.map(t => (
                                   <tr key={t.id}>
-                                    <td className="border border-gray-400 p-2 whitespace-nowrap">{toROCDate(t.date)}</td>
-                                    <td className="border border-gray-400 p-2 whitespace-nowrap">{t.category}</td>
-                                    <td className="border border-gray-400 p-2 whitespace-nowrap">{t.note}</td>
-                                    <td className={`border border-gray-400 p-2 text-right whitespace-nowrap font-mono ${t.type==='income'?'text-red-600':'text-blue-600'}`}>
+                                    <td className="border border-gray-400 p-2 align-top whitespace-nowrap">{toROCDate(t.date)}</td>
+                                    <td className="border border-gray-400 p-2 align-top whitespace-nowrap">{t.category}</td>
+                                    <td className="border border-gray-400 p-2 align-top whitespace-normal break-words">{t.note}</td>
+                                    <td className={`border border-gray-400 p-2 text-right align-top whitespace-nowrap font-mono ${t.type==='income'?'text-red-600':'text-blue-600'}`}>
                                       {t.type==='income'?'':'-'}${Number(t.amount).toLocaleString()}
                                     </td>
                                   </tr>
                                 ))}
-                                <tr className="bg-gray-100 font-bold">
+                                <tr className="bg-gray-100 font-bold text-sm">
                                     <td colSpan="3" className="border border-gray-400 p-2 text-right whitespace-nowrap">本欄小計</td>
                                     <td className="border border-gray-400 p-2 text-right whitespace-nowrap">
                                         <div className="text-red-600">收: ${(subStats?.income||0).toLocaleString()}</div>
@@ -275,25 +312,25 @@ const PrintView = ({
                       )
                   })}
                 </div>
-              </section>
-            )}
+            </div>
+        )}
 
-            {/* 請款單 (✅ 修正：顏色、正負、收入支出) */}
-            {printConfig.requisition && (
-              <section className="mb-8 style={{ breakInside: 'avoid' }}">
-                <h2 className="text-lg font-bold border-l-4 border-gray-800 pl-2 mb-4">請款單明細</h2>
+        {/* ==================== PAGE 8: 請款單 ==================== */}
+        {printConfig.requisition && (
+            <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
+                <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">請款單明細</h2>
                 {requisitions.length > 0 ? Object.keys(groupedRequisitions).map(shareholder => {
                   let subTotal = 0;
                   return (
-                      <div key={shareholder} className="mb-4 break-inside-avoid">
-                        <h3 className="font-bold text-sm bg-gray-200 p-2 border border-gray-400 border-b-0">股東: {shareholder}</h3>
-                        <table className="w-full text-sm border-collapse border border-gray-400">
+                      <div key={shareholder} className="mb-6 break-inside-avoid">
+                        <h3 className="font-bold text-base bg-gray-200 p-2 border-2 border-gray-400 border-b-0">股東: {shareholder}</h3>
+                        <table className="w-full text-xs border-collapse border-2 border-gray-400">
                             <thead>
                               <tr className="bg-gray-100">
-                                <th className="border border-gray-400 p-2 w-24 whitespace-nowrap">日期</th>
-                                <th className="border border-gray-400 p-2 w-16 whitespace-nowrap">類型</th>
-                                <th className="border border-gray-400 p-2 whitespace-nowrap">標的物</th>
-                                <th className="border border-gray-400 p-2 whitespace-nowrap">明細</th>
+                                <th className="border border-gray-400 p-2 w-20 whitespace-nowrap">日期</th>
+                                <th className="border border-gray-400 p-2 w-12 whitespace-nowrap">類型</th>
+                                <th className="border border-gray-400 p-2 whitespace-normal min-w-[100px]">標的物</th>
+                                <th className="border border-gray-400 p-2 whitespace-normal">明細</th>
                                 <th className="border border-gray-400 p-2 w-24 text-right whitespace-nowrap">金額</th>
                               </tr>
                             </thead>
@@ -305,17 +342,17 @@ const PrintView = ({
                                   subTotal += signAmt;
                                   return (
                                     <tr key={r.id}>
-                                      <td className="border border-gray-400 p-2 whitespace-nowrap">{toROCDate(r.date)}</td>
-                                      <td className={`border border-gray-400 p-2 whitespace-nowrap font-bold ${isIncome?'text-red-600':'text-blue-600'}`}>{isIncome?'收入':'支出'}</td>
-                                      <td className="border border-gray-400 p-2 text-xs whitespace-nowrap">{r.target}</td>
-                                      <td className="border border-gray-400 p-2 flex items-center gap-1 whitespace-nowrap"><span>{r.details}</span>{r.image && <span className="text-[10px] bg-blue-100 text-blue-600 px-1 rounded">圖</span>}</td>
-                                      <td className={`border border-gray-400 p-2 text-right font-mono whitespace-nowrap ${isIncome?'text-red-600':'text-blue-600'}`}>
+                                      <td className="border border-gray-400 p-2 align-top whitespace-nowrap">{toROCDate(r.date)}</td>
+                                      <td className={`border border-gray-400 p-2 align-top whitespace-nowrap font-bold ${isIncome?'text-red-600':'text-blue-600'}`}>{isIncome?'收入':'支出'}</td>
+                                      <td className="border border-gray-400 p-2 text-xs align-top whitespace-normal break-words">{r.target}</td>
+                                      <td className="border border-gray-400 p-2 align-top whitespace-normal break-words">{r.details}</td>
+                                      <td className={`border border-gray-400 p-2 text-right align-top font-mono whitespace-nowrap ${isIncome?'text-red-600':'text-blue-600'}`}>
                                         {isIncome?'':'-'}${amt.toLocaleString()}
                                       </td>
                                     </tr>
                                   );
                                 })}
-                                <tr className="bg-gray-100">
+                                <tr className="bg-gray-100 text-sm">
                                   <td colSpan="4" className="border border-gray-400 p-2 text-right font-bold whitespace-nowrap">小計</td>
                                   <td className={`border border-gray-400 p-2 text-right font-bold whitespace-nowrap ${subTotal>=0?'text-red-600':'text-blue-600'}`}>
                                     ${subTotal.toLocaleString()}
@@ -326,9 +363,8 @@ const PrintView = ({
                       </div>
                   )
                 }) : <div className="text-gray-400 italic border p-4 text-center">無請款資料</div>}
-              </section>
-            )}
-        </div>
+            </div>
+        )}
     </div>
   );
 };

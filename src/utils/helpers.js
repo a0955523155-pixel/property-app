@@ -43,23 +43,35 @@ const safe = (str) => {
 };
 
 // ✅ CSV 匯出邏輯
-export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions, handoverData, projectTeams, requisitions, visibleLandIds = null) => {
+export const exportMasterCSV = (projectName, buyers, lands, buildings, transactions, handoverData, projectTeams, requisitions, visibleLandIds = null, visibleHandoverUnits = null) => {
     let csvContent = "\uFEFF"; 
     csvContent += `=== 專案報表: ${safe(projectName)} ===\n`;
     csvContent += `匯出日期,${safe(toROCDate(new Date()))}\n\n`;
 
-    // 0. 專案團隊
+    // 1. 總結算
+    const targetLands = visibleLandIds ? lands.filter(l => visibleLandIds.includes(l.id)) : lands;
+    let lM2 = 0, lPing = 0, lPrice = 0;
+    targetLands.forEach(l => { lM2 += Number(l.holdingAreaM2)||0; lPing += Number(l.holdingAreaPing)||0; lPrice += Number(l.totalPrice)||0; });
+
+    let bM2 = 0, bPrice = 0;
+    buildings.forEach(b => { bM2 += Number(b.areaM2)||0; bPrice += Number(b.totalPrice)||0; });
+
+    csvContent += "=== 全案總結算 ===\n";
+    csvContent += "項目,總面積(m2),總坪數,總金額($)\n";
+    csvContent += `土地總計,${lM2.toFixed(3)},${lPing.toFixed(3)},${lPrice}\n`;
+    csvContent += `建物總計,${bM2.toFixed(3)},${toPing(bM2).toFixed(3)},${bPrice}\n\n`;
+
+    // 2. 專案團隊
     if (projectTeams && projectTeams.length > 0) {
       csvContent += "=== 專案團隊資訊 ===\n";
       csvContent += "歸屬戶號,仲介公司,經紀人,開發業務,合約類型,合約編號,行銷業務,單據類型,單據編號,承辦代書\n";
       projectTeams.forEach(team => {
-          const devType = team.developerType === 'exclusive' ? '專任約' : '一般約';
-          csvContent += `${safe(team.unit)},${safe(team.agency)},${safe(team.broker)},${safe(team.developer)},${safe(devType)},${safe(team.developerNo)},${safe(team.marketer)},"斡旋/訂金",${safe(team.marketerNo)},${safe(team.scrivener)}\n`;
+          csvContent += `${safe(team.unit)},${safe(team.agency)},${safe(team.broker)},${safe(team.developer)},${safe(team.developerType)},${safe(team.developerNo)},${safe(team.marketer)},"斡旋/訂金",${safe(team.marketerNo)},${safe(team.scrivener)}\n`;
       });
       csvContent += "\n";
     }
 
-    // 1. 買受人
+    // 3. 買受人
     csvContent += "=== 買受人資訊 ===\n";
     csvContent += "戶號,姓名,電話,地址,土地合約價,建物合約價,合約總價\n";
     buyers.forEach(b => {
@@ -67,23 +79,9 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 2. 土地
-    const targetLands = visibleLandIds ? lands.filter(l => visibleLandIds.includes(l.id)) : lands;
-    
-    let grandM2 = 0, grandPing = 0, grandPrice = 0;
-    targetLands.forEach(l => {
-        grandM2 += Number(l.holdingAreaM2) || 0;
-        grandPing += Number(l.holdingAreaPing) || 0;
-        grandPrice += Number(l.totalPrice) || 0;
-    });
-
-    csvContent += "=== 全案土地總結算 ===\n";
-    csvContent += "總持有面積(m2),總持有坪數,總金額($)\n";
-    csvContent += `${grandM2.toFixed(3)},${grandPing.toFixed(3)},${grandPrice}\n\n`;
-
+    // 4. 土地詳細
     csvContent += "=== 土地標的詳細清單 ===\n";
     csvContent += "出售人(地址),地段,戶號,成交日期,地號,原始面積(m2),持分(分子/分母),持分面積(m2),持分坪數,單價(元/坪),小計($)\n";
-
     targetLands.forEach(l => {
       const sellersStr = l.sellers.map(s => `${s.name}${s.address ? `(${s.address})` : ''}`).join('; ');
       l.items.forEach(item => {
@@ -93,14 +91,13 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
         const hM2 = item.detailM2 ? item.detailM2 : (rawM2 * (num / denom)).toFixed(3);
         const hPing = item.detailPing ? item.detailPing : toPing(hM2).toFixed(3);
         const cost = item.subtotal;
-        
         csvContent += `${safe(sellersStr)},${safe(l.section)},${safe(item.unit)},${safe(toROCDate(item.date))},${safe(item.lotNumber)},${rawM2},${num}/${denom},${hM2},${hPing},${item.pricePerPing},${cost}\n`;
       });
       csvContent += `,,,[本筆合計],,,,,${Number(l.holdingAreaM2).toFixed(3)},${Number(l.holdingAreaPing).toFixed(3)},,${Number(l.totalPrice)}\n`;
     });
     csvContent += "\n";
 
-    // 3. 建物
+    // 5. 建物
     csvContent += "=== 建物標的清單 ===\n";
     csvContent += "戶號,成交日期,出售人/屋主,建照號碼,門牌地址,使照號碼,建號,面積(m2),單價(元/坪),成交總額($)\n";
     const sortedBuildings = [...buildings].sort((a, b) => (a.unit || a.address || "").localeCompare(b.unit || b.address || "", "zh-Hant"));
@@ -110,7 +107,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 4. 請款單 (✅ 修正：判斷收入/支出)
+    // 6. 請款單
     if (requisitions && requisitions.length > 0) {
       csvContent += "=== 請款單明細 (依股東分類) ===\n";
       const reqGroups = requisitions.reduce((acc, curr) => {
@@ -121,15 +118,13 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
       }, {});
       Object.keys(reqGroups).forEach(shareholder => {
         csvContent += `--- 股東: ${safe(shareholder)} ---\n`;
-        csvContent += "日期,類型,標的物,款項明細,金額\n"; // 新增類型欄位
+        csvContent += "日期,類型,標的物,款項明細,金額\n";
         let subTotal = 0;
         reqGroups[shareholder].forEach(r => {
            const isIncome = r.type === 'income';
            const amount = Number(r.amount) || 0;
-           // 收入為正，支出為負
            const signAmount = isIncome ? amount : -amount;
            const typeStr = isIncome ? '收入' : '支出';
-           
            csvContent += `${safe(toROCDate(r.date))},${safe(typeStr)},${safe(r.target)},${safe(r.details)},${signAmount}\n`;
            subTotal += signAmount;
         });
@@ -138,7 +133,7 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
       csvContent += "\n";
     }
 
-    // 5. 財務
+    // 7. 財務
     csvContent += "=== 財務收支明細 ===\n";
     csvContent += "日期,類型,科目,歸屬類別,具體對象,金額,備註\n";
     transactions.forEach(t => {
@@ -152,12 +147,18 @@ export const exportMasterCSV = (projectName, buyers, lands, buildings, transacti
     });
     csvContent += "\n";
 
-    // 6. 交屋
-    if (handoverData) {
+    // 8. ✅ 交屋點交 (支援多筆)
+    if (handoverData && Array.isArray(handoverData) && handoverData.length > 0) {
       csvContent += "=== 交屋點交確認單 ===\n";
-      csvContent += `點交日期,${safe(toROCDate(handoverData.handoverDate))}\n`;
-      csvContent += `電單號碼,${safe(handoverData.electricityBill)}\n`;
-      csvContent += `水單號碼,${safe(handoverData.waterBill)}\n`;
+      csvContent += "戶號,點交日期,電單號碼,水單號碼,遙控器,鑰匙(前),鑰匙(後),保固書,竣工圖,使照正本\n";
+      
+      const targets = visibleHandoverUnits 
+        ? handoverData.filter(h => visibleHandoverUnits.includes(h.unit))
+        : handoverData;
+
+      targets.forEach(h => {
+          csvContent += `${safe(h.unit)},${safe(toROCDate(h.handoverDate))},${safe(h.electricityBill)},${safe(h.waterBill)},${h.remotes},${h.keysFront},${h.keysBack},${h.warranty?'有':'無'},${h.drawings?'有':'無'},${h.originalPermit?'有':'無'}\n`;
+      });
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
