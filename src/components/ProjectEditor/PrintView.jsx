@@ -1,7 +1,7 @@
 import React from 'react';
 import { toROCDate, toPing } from '../../utils/helpers';
 
-// ✅ 標籤樣式
+// ✅ 標籤樣式 (維持小字體，作為對比)
 const Label = ({ children }) => (
   <span className="inline-block bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded mr-1.5 text-xs font-bold whitespace-nowrap align-middle">
     {children}
@@ -114,14 +114,12 @@ const PrintView = ({
              </div>
         )}
         
-        {/* ==================== PAGE 4: 土地標的 (✅ 修正：標題銜接 + 合計位置 + 戶號縮小) ==================== */}
+        {/* ==================== PAGE 4: 土地標的 (✅ 字體加大) ==================== */}
         {printConfig.lands && (
            <div className="print-section-page">
-             {/* 標題強制分頁，確保它在新頁面的最上方 */}
              <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4 break-before-page" style={{ pageBreakBefore: 'always' }}>土地標的詳細清單</h2>
              
              {lands.length > 0 ? lands.filter(l => visibleLandIds.includes(l.id)).map((l, index) => (
-               // ✅ 修正邏輯：第一筆(index 0)不分頁(直接接標題)，第二筆之後才分頁
                <div key={l.id} style={index === 0 ? {} : { pageBreakBefore: 'always' }} className="mb-8">
                  
                  <table className="w-full border-collapse table-fixed text-xs">
@@ -151,30 +149,64 @@ const PrintView = ({
                        
                        return (
                          <tbody key={item.id} className="border-2 border-black border-t-0 break-inside-avoid">
-                            <tr className="bg-gray-50 border-b border-gray-300">
-                                {/* ✅ 戶號再縮小：w-[25px] */}
-                                <td rowSpan={3} className="border-r border-black p-2 font-black text-center align-middle text-lg w-[25px] bg-gray-100">{item.unit}</td>
-                                <td className="p-2 border-r border-gray-300 w-1/2"><Label>成交日期</Label><span className="font-mono align-middle text-sm">{toROCDate(item.date)}</span></td>
-                                <td className="p-2 w-1/2"><Label>地號</Label><span className="font-mono font-bold bg-white border px-1.5 py-0.5 rounded text-sm align-middle">{item.lotNumber}</span></td>
+                            {/* Row 1 */}
+                            <tr className="bg-gray-100 border-b border-gray-300">
+                                <td className="p-2 border-r border-gray-300 w-[40px] text-center align-middle">
+                                    <span className="font-black text-lg">{item.unit}</span>
+                                </td>
+                                <td className="p-2 border-r border-gray-300 w-auto align-middle">
+                                    <Label>成交日期</Label>
+                                    <span className="font-mono text-sm font-bold">{toROCDate(item.date)}</span>
+                                </td>
+                                <td className="p-2 w-auto align-middle">
+                                    <Label>地號</Label>
+                                    <span className="font-mono font-bold bg-white border px-1.5 py-0.5 rounded text-sm">{item.lotNumber}</span>
+                                </td>
                             </tr>
+
+                            {/* Row 2: ✅ 原始面積 / 持分比例 / 持分面積 (字體加大) */}
                             <tr className="border-b border-gray-300">
-                                <td colSpan={2} className="p-0">
+                                <td colSpan={3} className="p-0">
                                     <div className="grid grid-cols-3 divide-x divide-gray-300">
-                                        <div className="p-2"><Label>原始面積</Label><span className="font-mono align-middle">{item.areaM2} m²</span></div>
-                                        <div className="p-2 flex items-center"><Label>持分比例</Label><div className="inline-flex flex-col items-center justify-center leading-none text-[10px] ml-1"><span className="border-b border-black pb-[1px] w-full text-center">{num}</span><span className="w-full text-center">{denom}</span></div></div>
-                                        <div className="p-2 bg-yellow-50"><Label>持分面積</Label><div className="font-bold inline-block align-middle">{hM2} m² <span className="text-gray-500 text-[10px] font-normal">({hPing}坪)</span></div></div>
+                                        <div className="p-2">
+                                            <Label>原始面積</Label>
+                                            {/* 加大字體 text-sm */}
+                                            <span className="font-mono align-middle font-bold text-sm">{item.areaM2} m²</span>
+                                        </div>
+                                        <div className="p-2 flex items-center">
+                                            <Label>持分比例</Label>
+                                            {/* 加大字體 text-sm */}
+                                            <div className="inline-flex flex-col items-center justify-center leading-none text-sm ml-1 font-bold">
+                                                <span className="border-b border-black pb-[1px] w-full text-center">{num}</span>
+                                                <span className="w-full text-center">{denom}</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-2 bg-yellow-50">
+                                            <Label>持分面積</Label>
+                                            {/* 加大字體 text-sm ~ text-base */}
+                                            <div className="font-black inline-block align-middle text-sm">{hM2} m² <span className="text-gray-500 text-xs font-normal">({hPing}坪)</span></div>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
+
+                            {/* Row 3: ✅ 每坪單價 (字體加大) */}
                             <tr>
-                                <td className="p-2 border-r border-gray-300"><Label>每坪單價</Label><span className="font-mono align-middle">${Number(item.pricePerPing).toLocaleString()}</span></td>
-                                <td className="p-2 text-right"><Label>本筆小計</Label><span className="font-black text-base align-middle">${Number(item.subtotal).toLocaleString()}</span></td>
+                                <td colSpan={3} className="p-0">
+                                    <div className="grid grid-cols-2 divide-x divide-gray-300">
+                                        <div className="p-2">
+                                            <Label>每坪單價</Label>
+                                            {/* 加大字體 text-sm */}
+                                            <span className="font-mono align-middle font-bold text-sm">${Number(item.pricePerPing).toLocaleString()}</span>
+                                        </div>
+                                        <div className="p-2 text-right"><Label>本筆小計</Label><span className="font-black text-base align-middle">${Number(item.subtotal).toLocaleString()}</span></div>
+                                    </div>
+                                </td>
                             </tr>
                          </tbody>
                        )
                     })}
 
-                    {/* ✅ 合計：直接做為表格的最後一行 (tbody)，確保只顯示在該出售人資料的底部 */}
                     <tbody className="border-2 border-t-0 border-black bg-gray-100 font-bold break-inside-avoid">
                         <tr>
                             <td colSpan="3" className="p-3 text-right">
@@ -190,7 +222,7 @@ const PrintView = ({
            </div>
         )}
 
-        {/* ==================== PAGE 5: 建物標的 (✅ 建照/使照 絕對置中) ==================== */}
+        {/* ==================== PAGE 5: 建物標的 (✅ 面積字體加大 + 坪數) ==================== */}
         {printConfig.buildings && (
               <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
                 <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">建物標的清單</h2>
@@ -207,7 +239,6 @@ const PrintView = ({
                                 <td colSpan={3} className="p-2"><Label>門牌地址</Label><span className="font-bold text-black text-sm align-middle">{b.address}</span></td>
                             </tr>
                             <tr className="border-b border-gray-300">
-                                {/* ✅ 使用 Flex w-1/2 確保分隔線置中 */}
                                 <td colSpan={3} className="p-0">
                                     <div className="flex w-full">
                                         <div className="w-1/2 p-2 border-r border-gray-300 flex items-center">
@@ -221,7 +252,14 @@ const PrintView = ({
                             </tr>
                             <tr>
                                 <td className="p-2 border-r border-gray-300"><Label>建號</Label><span className="font-mono font-bold text-sm align-middle">{b.buildNumber}</span></td>
-                                <td className="p-2 border-r border-gray-300"><Label>面積</Label><span className="font-mono align-middle">{b.areaM2} m²</span></td>
+                                <td className="p-2 border-r border-gray-300">
+                                    <Label>面積</Label>
+                                    {/* ✅ 修正：字體加大 text-sm */}
+                                    <span className="font-mono align-middle font-bold text-sm">
+                                        {b.areaM2} m² 
+                                        <span className="text-gray-500 text-xs ml-1 font-normal">({toPing(b.areaM2).toFixed(2)}坪)</span>
+                                    </span>
+                                </td>
                                 <td className="p-2 text-right"><Label>總金額</Label><span className="font-black text-base align-middle">${Number(b.totalPrice).toLocaleString()}</span></td>
                             </tr>
                         </tbody>
@@ -231,7 +269,7 @@ const PrintView = ({
               </div>
         )}
 
-        {/* ... 交屋、財務、請款單 (保持原樣) ... */}
+        {/* ... 交屋、財務、請款單 ... */}
         {/* ==================== PAGE 6+: 交屋點交 ==================== */}
         {printConfig.handover && handoverData && handoverData.length > 0 && (
             <>
@@ -262,7 +300,7 @@ const PrintView = ({
             </>
         )}
             
-        {/* ==================== PAGE 7: 財務收支 ==================== */}
+        {/* ==================== PAGE 7: 財務收支 (✅ 修正：金額欄位加寬，防止小計跑版) ==================== */}
         {printConfig.finance && (
             <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
                 <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">收支明細</h2>
@@ -284,7 +322,8 @@ const PrintView = ({
                                 <th className="border border-gray-400 p-2 w-24 whitespace-nowrap">日期</th>
                                 <th className="border border-gray-400 p-2 w-20 whitespace-nowrap">類型</th>
                                 <th className="border border-gray-400 p-2 whitespace-normal">對象/備註</th>
-                                <th className="border border-gray-400 p-2 w-24 text-right whitespace-nowrap">金額</th>
+                                {/* ✅ 修正：加寬至 w-36 */}
+                                <th className="border border-gray-400 p-2 w-36 text-right whitespace-nowrap">金額</th>
                               </tr>
                             </thead>
                             <tbody>
