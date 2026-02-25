@@ -2,12 +2,91 @@ import React, { useState } from 'react';
 import { DollarSign, Edit2, Trash2, Camera, X, ImageIcon, Save, Plus } from 'lucide-react';
 import { CATEGORIES, toROCDate } from '../../utils/helpers';
 
-// ✅ 財務表格元件 (接收 props)
+// ✅ 1. 獨立的編輯表單元件 (解決注音輸入跳字/失去焦點的問題)
+const TransactionEditForm = ({ 
+  data, onChange, onSave, onCancel, 
+  lands, buildings, buyers, 
+  handleImageUploadGeneric 
+}) => {
+    return (
+        <div className="bg-white p-6 rounded-xl border-2 border-blue-100 shadow-md animate-fadeIn">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+                <div>
+                    <label className="text-xs font-black block mb-2 text-gray-600">日期</label>
+                    <input type="date" className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.date} onChange={e => onChange('date', e.target.value)}/>
+                </div>
+                <div>
+                    <label className="text-xs font-black block mb-2 text-gray-600">類型</label>
+                    <select className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.type} onChange={e => { onChange('type', e.target.value); onChange('category', CATEGORIES[e.target.value][0]); }}>
+                        <option value="expense">支出</option>
+                        <option value="income">收入</option>
+                    </select>
+                </div>
+                <div>
+                    <label className="text-xs font-black block mb-2 text-gray-600">歸屬</label>
+                    <select className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.linkedType || "general"} onChange={e => { onChange('linkedType', e.target.value); onChange('linkedId', null); }}>
+                        <option value="general">一般</option>
+                        <option value="land">土地</option>
+                        <option value="building">建物</option>
+                        <option value="buyer">買方</option>
+                    </select>
+                </div>
+                
+                {data.linkedType !== 'general' && (
+                    <div>
+                        <label className="text-xs font-black block mb-2 text-gray-600">對象</label>
+                        <select className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.linkedId || ""} onChange={e => onChange('linkedId', Number(e.target.value))}>
+                            <option value="">--請選擇--</option>
+                            {data.linkedType === 'land' ? lands.map(l => <option key={l.id} value={l.id}>{l.sellers.map(s => s.name).join('/')}</option>) : 
+                             data.linkedType === 'building' ? buildings.map(b => <option key={b.id} value={b.id}>{b.sellers.map(s => s.name).join('/')}</option>) : 
+                             buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                    </div>
+                )}
+                
+                <div>
+                    <label className="text-xs font-black block mb-2 text-gray-600">科目</label>
+                    <select className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.category} onChange={e => onChange('category', e.target.value)}>
+                        {CATEGORIES[data.type].map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label className="text-xs font-black block mb-2 text-gray-600">金額</label>
+                    <input type="number" className="w-full p-2 border rounded-lg font-bold outline-none focus:border-blue-400 text-right" placeholder="0" value={data.amount} onChange={e => onChange('amount', e.target.value)}/>
+                </div>
+            </div>
+            
+            <div className="flex gap-4 mt-4 items-center">
+                <input 
+                    className="flex-1 p-2 border rounded-lg outline-none focus:border-blue-400 bg-gray-50 focus:bg-white transition-colors" 
+                    placeholder="輸入備註說明..." 
+                    value={data.note} 
+                    onChange={e => onChange('note', e.target.value)}
+                />
+                
+                <label className={`cursor-pointer p-2 border-2 rounded-lg flex items-center gap-1 text-sm font-bold transition-colors ${data.image ? 'border-green-200 bg-green-50 text-green-600' : 'border-dashed border-gray-300 hover:bg-gray-50 text-gray-500'}`}>
+                    <Camera className="w-4 h-4"/>
+                    {data.image ? '已更換憑證' : '上傳憑證'}
+                    <input type="file" className="hidden" accept="image/*" onChange={(e) => handleImageUploadGeneric(e.target.files[0], (res) => onChange('image', res))} />
+                </label>
+                
+                <div className="flex gap-2 border-l pl-4">
+                    <button onClick={onCancel} className="px-4 py-2 rounded-lg bg-gray-200 text-gray-600 font-bold hover:bg-gray-300">取消</button>
+                    <button onClick={onSave} className="px-6 py-2 rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 shadow flex items-center gap-1"><Save className="w-4 h-4"/> 儲存</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// ✅ 2. 財務表格元件 (接收 props，並將獨立的 Form 渲染進來)
 const TransactionTable = ({ 
-    data, typeLabel, colorTheme, subStats, 
-    editingTxId, startEditing, // ✅ 接收狀態與函式
-    setTransactions, transactions, setPreviewImage,
-    EditForm // ✅ 接收表單元件
+  data, typeLabel, colorTheme, subStats, 
+  editingTxId, startEditing, 
+  setTransactions, transactions, setPreviewImage,
+  // 傳遞給 Form 的必要 props
+  editData, handleEditChange, saveTransaction, cancelEdit,
+  lands, buildings, buyers, handleImageUploadGeneric
 }) => {
     const net = (subStats?.income || 0) - (subStats?.expense || 0);
     return (
@@ -18,12 +97,19 @@ const TransactionTable = ({
                 <thead className="text-xs text-gray-400 bg-gray-50 uppercase tracking-wider"><tr><th className="p-4 w-28 whitespace-nowrap">日期</th><th className="p-4 w-32 whitespace-nowrap">類型</th><th className="p-4 min-w-[200px]">項目 / 對象 / 備註</th><th className="p-4 text-right w-32 whitespace-nowrap">金額</th><th className="p-4 w-16 text-center print:hidden">操作</th></tr></thead>
                 <tbody className="divide-y divide-gray-100">
                     {data.map(t => { 
-                        // ✅ 原地變身邏輯
+                        // 原地編輯
                         if (editingTxId === t.id) {
                             return (
                                 <tr key={t.id}>
                                     <td colSpan="5" className="p-2 bg-gray-50">
-                                        <EditForm />
+                                        <TransactionEditForm 
+                                            data={editData} 
+                                            onChange={handleEditChange} 
+                                            onSave={() => saveTransaction(null)} 
+                                            onCancel={cancelEdit}
+                                            lands={lands} buildings={buildings} buyers={buyers}
+                                            handleImageUploadGeneric={handleImageUploadGeneric}
+                                        />
                                     </td>
                                 </tr>
                             );
@@ -38,7 +124,7 @@ const TransactionTable = ({
                                 <td className="p-4 text-center print:hidden">
                                     <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition">
                                         <button onClick={() => startEditing(t)} className="text-gray-400 hover:text-blue-600"><Edit2 className="w-4 h-4"/></button>
-                                        <button onClick={() => { if(confirm("刪除？")) setTransactions(transactions.filter(item => item.id !== t.id)) }} className="text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
+                                        <button onClick={() => { if(confirm("確定刪除？")) setTransactions(transactions.filter(item => item.id !== t.id)) }} className="text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>
                                     </div>
                                 </td>
                             </tr>
@@ -52,13 +138,19 @@ const TransactionTable = ({
     );
 };
 
+// ✅ 主元件
 const FinanceSection = ({ transactions, setTransactions, stats, groupedTransactions, lands, buildings, buyers, visibleLedgers, setVisibleLedgers, handleImageUploadGeneric, setPreviewImage }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [editingTxId, setEditingTxId] = useState(null);
   const today = new Date().toISOString().split('T')[0];
+  
+  // 統一管理暫存資料
   const [newTx, setNewTx] = useState({ date: today, type: 'expense', category: CATEGORIES.expense[0], amount: '', note: '', image: null, linkedId: null, linkedType: 'general' });
 
-  const handleImage = (file) => handleImageUploadGeneric(file, (res) => setNewTx(p => ({...p, image: res})));
+  // 處理暫存資料更新 (不會讓整個表單重新掛載)
+  const handleEditChange = (field, value) => {
+      setNewTx(prev => ({ ...prev, [field]: value }));
+  };
 
   const startCreating = () => {
       setEditingTxId(null);
@@ -78,59 +170,65 @@ const FinanceSection = ({ transactions, setTransactions, stats, groupedTransacti
   };
 
   const saveTransaction = (e) => {
-     if(e) e.preventDefault();
-     if (!newTx.amount) return;
-     
-     if (editingTxId) setTransactions(transactions.map(t => t.id === editingTxId ? { ...newTx, id: t.id, amount: Number(newTx.amount) } : t));
-     else setTransactions([...transactions, { ...newTx, id: Date.now(), amount: Number(newTx.amount) }]);
-     
-     cancelEdit();
+      if(e) e.preventDefault();
+      if (!newTx.amount) return alert("請輸入金額");
+      
+      const parsedAmount = Number(newTx.amount);
+      if (isNaN(parsedAmount)) return alert("金額必須為數字");
+      
+      if (editingTxId) {
+          setTransactions(transactions.map(t => t.id === editingTxId ? { ...newTx, id: t.id, amount: parsedAmount } : t));
+      } else {
+          setTransactions([...transactions, { ...newTx, id: Date.now(), amount: parsedAmount }]);
+      }
+      
+      cancelEdit();
   };
 
-  // ✅ 抽離出共用表單，讓 Table 也能呼叫
-  const EditForm = () => (
-      <div className="bg-white p-6 rounded-xl border-2 border-blue-100 shadow-md">
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
-              <div><label className="text-xs font-black block mb-2">日期</label><input type="date" className="w-full p-2 border rounded-lg" value={newTx.date} onChange={e=>setNewTx({...newTx, date:e.target.value})}/></div>
-              <div><label className="text-xs font-black block mb-2">類型</label><select className="w-full p-2 border rounded-lg" value={newTx.type} onChange={e=>setNewTx({...newTx, type:e.target.value, category:CATEGORIES[e.target.value][0]})}>{/* Options */}<option value="expense">支出</option><option value="income">收入</option></select></div>
-              <div><label className="text-xs font-black block mb-2">歸屬</label><select className="w-full p-2 border rounded-lg" value={newTx.linkedType||"general"} onChange={e=>setNewTx({...newTx, linkedType:e.target.value, linkedId:null})}><option value="general">一般</option><option value="land">土地</option><option value="building">建物</option><option value="buyer">買方</option></select></div>
-              {newTx.linkedType !== 'general' && (<div><label className="text-xs font-black block mb-2">對象</label><select className="w-full p-2 border rounded-lg" value={newTx.linkedId||""} onChange={e=>setNewTx({...newTx, linkedId:Number(e.target.value)})}>{newTx.linkedType==='land'?lands.map(l=><option key={l.id} value={l.id}>{l.sellers.map(s=>s.name).join('/')}</option>):newTx.linkedType==='building'?buildings.map(b=><option key={b.id} value={b.id}>{b.sellers.map(s=>s.name).join('/')}</option>):buyers.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select></div>)}
-              <div><label className="text-xs font-black block mb-2">科目</label><select className="w-full p-2 border rounded-lg" value={newTx.category} onChange={e=>setNewTx({...newTx, category:e.target.value})}>{CATEGORIES[newTx.type].map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-              <div><label className="text-xs font-black block mb-2">金額</label><input type="number" className="w-full p-2 border rounded-lg font-bold" value={newTx.amount} onChange={e=>setNewTx({...newTx, amount:e.target.value})}/></div>
-          </div>
-          <div className="flex gap-4 mt-4 items-center">
-              <input className="flex-1 p-2 border rounded-lg" placeholder="備註說明..." value={newTx.note} onChange={e=>setNewTx({...newTx, note:e.target.value})}/>
-              <label className="cursor-pointer p-2 border-2 border-dashed rounded-lg flex items-center gap-1 hover:bg-gray-50"><Camera className="w-4 h-4"/><input type="file" className="hidden" accept="image/*" onChange={(e)=>handleImage(e.target.files[0])} /></label>
-              {newTx.image && <span className="text-green-600 text-xs font-bold">有圖</span>}
-              
-              <div className="flex gap-2">
-                  <button onClick={cancelEdit} className="px-4 py-2 rounded-lg bg-gray-200 text-gray-600 font-bold hover:bg-gray-300">取消</button>
-                  <button onClick={saveTransaction} className="px-6 py-2 rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 shadow flex items-center gap-1"><Save className="w-4 h-4"/> 儲存</button>
-              </div>
-          </div>
-      </div>
-  );
-  
   return (
     <div className="space-y-8 animate-fadeIn relative">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-center h-32"><div className="text-sm text-gray-400 font-black uppercase text-center">總收入</div><div className="text-4xl font-black text-red-600 text-center">${stats.totalIncome.toLocaleString()}</div></div><div className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-center h-32"><div className="text-sm text-gray-400 font-black uppercase text-center">總支出</div><div className="text-4xl font-black text-blue-600 text-center">${stats.totalExpense.toLocaleString()}</div></div><div className={`p-6 rounded-2xl shadow-xl flex flex-col justify-center h-32 ${stats.netProfit >= 0 ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'}`}><div className="text-sm text-white/60 font-black uppercase text-center">淨利 (ROI: {stats.roi}%)</div><div className="text-4xl font-black text-center">${stats.netProfit.toLocaleString()}</div></div></div>
+        {/* 頂部統計 */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-center h-32"><div className="text-sm text-gray-400 font-black uppercase text-center">總收入</div><div className="text-4xl font-black text-red-600 text-center">${stats.totalIncome.toLocaleString()}</div></div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-center h-32"><div className="text-sm text-gray-400 font-black uppercase text-center">總支出</div><div className="text-4xl font-black text-blue-600 text-center">${stats.totalExpense.toLocaleString()}</div></div>
+            <div className={`p-6 rounded-2xl shadow-xl flex flex-col justify-center h-32 ${stats.netProfit >= 0 ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'}`}><div className="text-sm text-white/60 font-black uppercase text-center">淨利 (ROI: {stats.roi}%)</div><div className="text-4xl font-black text-center">${stats.netProfit.toLocaleString()}</div></div>
+        </div>
         
+        {/* 過濾器與新增按鈕 */}
         <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="bg-gray-50 border rounded-xl p-4 flex flex-wrap gap-6 flex-1"><label className="flex gap-2 font-bold cursor-pointer"><input type="checkbox" checked={visibleLedgers.general} onChange={(e)=>setVisibleLedgers({...visibleLedgers, general: e.target.checked})} />一般</label><label className="flex gap-2 font-bold cursor-pointer text-blue-700"><input type="checkbox" checked={visibleLedgers.land} onChange={(e)=>setVisibleLedgers({...visibleLedgers, land: e.target.checked})} />土地</label><label className="flex gap-2 font-bold cursor-pointer text-orange-700"><input type="checkbox" checked={visibleLedgers.building} onChange={(e)=>setVisibleLedgers({...visibleLedgers, building: e.target.checked})} />建物</label><label className="flex gap-2 font-bold cursor-pointer text-green-700"><input type="checkbox" checked={visibleLedgers.buyer} onChange={(e)=>setVisibleLedgers({...visibleLedgers, buyer: e.target.checked})} />買方</label></div>
+            <div className="bg-gray-50 border rounded-xl p-4 flex flex-wrap gap-6 flex-1">
+                <label className="flex gap-2 font-bold cursor-pointer"><input type="checkbox" checked={visibleLedgers.general} onChange={(e)=>setVisibleLedgers({...visibleLedgers, general: e.target.checked})} />一般</label>
+                <label className="flex gap-2 font-bold cursor-pointer text-blue-700"><input type="checkbox" checked={visibleLedgers.land} onChange={(e)=>setVisibleLedgers({...visibleLedgers, land: e.target.checked})} />土地</label>
+                <label className="flex gap-2 font-bold cursor-pointer text-orange-700"><input type="checkbox" checked={visibleLedgers.building} onChange={(e)=>setVisibleLedgers({...visibleLedgers, building: e.target.checked})} />建物</label>
+                <label className="flex gap-2 font-bold cursor-pointer text-green-700"><input type="checkbox" checked={visibleLedgers.buyer} onChange={(e)=>setVisibleLedgers({...visibleLedgers, buyer: e.target.checked})} />買方</label>
+            </div>
             
-            {/* 新增按鈕 */}
             {!isCreating && (
-                <button onClick={startCreating} className="bg-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-700 shadow-md flex items-center gap-2 whitespace-nowrap"><Plus className="w-5 h-5"/> 新增收支</button>
+                <button onClick={startCreating} className="bg-blue-600 text-white px-6 py-4 rounded-xl font-bold hover:bg-blue-700 shadow-md flex items-center gap-2 whitespace-nowrap">
+                    <Plus className="w-5 h-5"/> 新增收支
+                </button>
             )}
         </div>
 
-        {/* 新增表單 (置頂) */}
-        {isCreating && <div className="mb-8"><EditForm /></div>}
+        {/* 新增表單 (置頂顯示) */}
+        {isCreating && (
+            <div className="mb-8">
+                <TransactionEditForm 
+                    data={newTx} 
+                    onChange={handleEditChange} 
+                    onSave={() => saveTransaction(null)} 
+                    onCancel={cancelEdit}
+                    lands={lands} buildings={buildings} buyers={buyers}
+                    handleImageUploadGeneric={handleImageUploadGeneric}
+                />
+            </div>
+        )}
 
-        {visibleLedgers.general && <TransactionTable data={groupedTransactions.general} typeLabel="一般專案收支" colorTheme="border-gray-200" subStats={stats.subTotals.general} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} EditForm={EditForm} />}
-        {visibleLedgers.land && <TransactionTable data={groupedTransactions.land} typeLabel="土地出售人帳目" colorTheme="border-blue-200" subStats={stats.subTotals.land} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} EditForm={EditForm} />}
-        {visibleLedgers.building && <TransactionTable data={groupedTransactions.building} typeLabel="建物出售人帳目" colorTheme="border-orange-200" subStats={stats.subTotals.building} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} EditForm={EditForm} />}
-        {visibleLedgers.buyer && <TransactionTable data={groupedTransactions.buyer} typeLabel="買受人帳目" colorTheme="border-green-200" subStats={stats.subTotals.buyer} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} EditForm={EditForm} />}
+        {/* 帳目列表 */}
+        {visibleLedgers.general && <TransactionTable data={groupedTransactions.general} typeLabel="一般專案收支" colorTheme="border-gray-200" subStats={stats.subTotals.general} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} editData={newTx} handleEditChange={handleEditChange} saveTransaction={saveTransaction} cancelEdit={cancelEdit} lands={lands} buildings={buildings} buyers={buyers} handleImageUploadGeneric={handleImageUploadGeneric} />}
+        {visibleLedgers.land && <TransactionTable data={groupedTransactions.land} typeLabel="土地出售人帳目" colorTheme="border-blue-200" subStats={stats.subTotals.land} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} editData={newTx} handleEditChange={handleEditChange} saveTransaction={saveTransaction} cancelEdit={cancelEdit} lands={lands} buildings={buildings} buyers={buyers} handleImageUploadGeneric={handleImageUploadGeneric} />}
+        {visibleLedgers.building && <TransactionTable data={groupedTransactions.building} typeLabel="建物出售人帳目" colorTheme="border-orange-200" subStats={stats.subTotals.building} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} editData={newTx} handleEditChange={handleEditChange} saveTransaction={saveTransaction} cancelEdit={cancelEdit} lands={lands} buildings={buildings} buyers={buyers} handleImageUploadGeneric={handleImageUploadGeneric} />}
+        {visibleLedgers.buyer && <TransactionTable data={groupedTransactions.buyer} typeLabel="買受人帳目" colorTheme="border-green-200" subStats={stats.subTotals.buyer} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} editData={newTx} handleEditChange={handleEditChange} saveTransaction={saveTransaction} cancelEdit={cancelEdit} lands={lands} buildings={buildings} buyers={buyers} handleImageUploadGeneric={handleImageUploadGeneric} />}
     </div>
   );
 };
