@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   AlertCircle, LayoutGrid, FolderPlus, 
-  Trash2, CheckCircle2, MessageSquarePlus, Send, ChevronDown, ChevronRight, PieChart, Building2, Folder, Tag, Users, Settings, Plus, X
+  Trash2, CheckCircle2, MessageSquarePlus, Send, ChevronDown, ChevronRight, PieChart, Building2, Folder, Tag, Users, Settings, Plus, X,
+  ArchiveRestore, Trash // ✅ 新增圖示
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase';
 import { 
-  collection, doc, updateDoc, addDoc, deleteDoc, getDoc, setDoc,
+  collection, doc, updateDoc, addDoc, deleteDoc, setDoc,
   onSnapshot, query, orderBy, limit 
 } from "firebase/firestore";
-import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 
 import ProjectEditor from './components/ProjectEditor';
 import ProjectSummaryReport from './components/ProjectSummaryReport';
@@ -38,11 +39,20 @@ const APP_STYLES = `
   }
 `;
 
+// ==========================================
+// 🚨 權限設定區：管理員信箱
+// ==========================================
+const ADMIN_EMAILS = [
+  'admin@dinglong.com', 
+  'zxcvbnm7780@gmail.com' 
+];
+
 const App = () => {
   const [currentUser, setCurrentUser] = useState(null);
-  const [auditLogs, setAuditLogs] = useState([]);
+  const isAdmin = currentUser && ADMIN_EMAILS.includes(currentUser.email);
 
-  const [projects, setProjects] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [projects, setProjects] = useState([]); // 包含所有專案 (含垃圾桶)
   const [feedbacks, setFeedbacks] = useState([]);
   const [newFeedback, setNewFeedback] = useState("");
   
@@ -57,15 +67,33 @@ const App = () => {
   const [targetAgencyForBroker, setTargetAgencyForBroker] = useState("");
   const [newBrokerName, setNewBrokerName] = useState("");
 
-  const [user, setUser] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
 
+  // ✅ 新增：垃圾桶視窗狀態
+  const [showTrashBin, setShowTrashBin] = useState(false);
+
+  // ✅ 資料分流：分為「正常顯示的案件」與「垃圾桶的案件」
+  const activeProjects = useMemo(() => projects.filter(p => !p.isDeleted), [projects]);
+  const trashedProjects = useMemo(() => projects.filter(p => p.isDeleted), [projects]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setCurrentUser(user);
+      } else {
+        setCurrentUser(null);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   const logAction = async (action, module, details) => {
+    if (!currentUser) return;
     try {
       await addDoc(collection(db, "audit_logs"), {
         time: new Date().toLocaleString('zh-TW', { hour12: false }),
         timestamp: Date.now(),
-        user: currentUser || '系統',
+        user: currentUser.email,
         action, 
         module, 
         details,
@@ -76,7 +104,6 @@ const App = () => {
     }
   };
 
-  // ✅ 修正：強制將 logId 轉為字串，防止 Firebase 報錯
   const handleAcknowledgeLog = async (logId) => {
     if (!logId) return;
     try {
@@ -103,17 +130,20 @@ const App = () => {
     window.addEventListener('beforeprint', handlePrint);
     window.addEventListener('keyup', handleKeyDown);
 
-    const qLogs = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(200));
-    const unsubLogs = onSnapshot(qLogs, (snapshot) => {
-      setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
+    let unsubLogs = () => {};
+    if (isAdmin) {
+      const qLogs = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(200));
+      unsubLogs = onSnapshot(qLogs, (snapshot) => {
+        setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+    }
 
     return () => {
       window.removeEventListener('beforeprint', handlePrint);
       window.removeEventListener('keyup', handleKeyDown);
       unsubLogs(); 
     };
-  }, [currentUser]);
+  }, [currentUser, isAdmin]);
 
   useEffect(() => {
     const styleTag = document.createElement("style");
@@ -123,14 +153,7 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    const initAuth = async () => { try { await signInAnonymously(auth); setErrorMsg(null); } catch (err) { console.error("Login Error:", err); setErrorMsg("登入失敗"); } };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!user) return; 
+    if (!currentUser) return; 
     const q = query(collection(db, "projects"), orderBy("name", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const projectsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -142,23 +165,14 @@ const App = () => {
       setFeedbacks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => { unsubscribe(); unsubFeed(); };
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
     const agencyDocRef = doc(db, "settings", "agency_list");
-    const unsubscribe = onSnapshot(agencyDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setAgencyDB(docSnap.data());
-      } else {
-        const defaultDB = { "自售/其他": ["屋主本人"] };
-        setDoc(agencyDocRef, defaultDB);
-        setAgencyDB(defaultDB);
-      }
+    const unsubAgency = onSnapshot(agencyDocRef, (docSnap) => {
+      if (docSnap.exists()) { setAgencyDB(docSnap.data()); } 
+      else { const defaultDB = { "自售/其他": ["屋主本人"] }; setDoc(agencyDocRef, defaultDB); setAgencyDB(defaultDB); }
     });
-    return () => unsubscribe();
-  }, [user]);
+
+    return () => { unsubscribe(); unsubFeed(); unsubAgency(); };
+  }, [currentUser]);
 
   const saveAgencyDB = async (newDB) => {
     try { await setDoc(doc(db, "settings", "agency_list"), newDB); } 
@@ -197,16 +211,17 @@ const App = () => {
     saveAgencyDB(newDB); 
   };
 
+  // ✅ 改用 activeProjects 來產生下拉選單與列表
   const uniqueSites = useMemo(() => {
-    const sites = projects.map(p => p.site || "大成工業城");
+    const sites = activeProjects.map(p => p.site || "大成工業城");
     const unique = [...new Set(sites)].sort();
     if (!unique.includes("大成工業城")) unique.unshift("大成工業城");
     return unique;
-  }, [projects]);
+  }, [activeProjects]);
 
   const filteredGroupedProjects = useMemo(() => {
     if (!activeSite) return {};
-    const targetProjects = projects.filter(p => (p.site || "大成工業城") === activeSite);
+    const targetProjects = activeProjects.filter(p => (p.site || "大成工業城") === activeSite);
     const groups = {};
     targetProjects.forEach(p => {
       const z = p.zone || "未分類";
@@ -214,7 +229,7 @@ const App = () => {
       groups[z].push(p);
     });
     return Object.keys(groups).sort().reduce((acc, key) => { acc[key] = groups[key]; return acc; }, {});
-  }, [projects, activeSite]);
+  }, [activeProjects, activeSite]);
 
   const toggleZone = (zone) => setExpandedZones(prev => ({ ...prev, [zone]: !prev[zone] }));
 
@@ -231,7 +246,7 @@ const App = () => {
   };
 
   const handleSaveProject = async (updatedProject) => {
-    if (!user) return; 
+    if (!currentUser) return; 
     try {
       const { id, ...data } = updatedProject;
       const projectRef = doc(db, "projects", id);
@@ -241,7 +256,7 @@ const App = () => {
   };
 
   const createNewProject = async () => {
-    if (!user) { alert("請稍候，正在連線資料庫..."); return; }
+    if (!currentUser) return;
     const targetSite = activeSite || "大成工業城";
     const newProjectName = "新案件 " + new Date().toLocaleDateString();
     
@@ -249,7 +264,8 @@ const App = () => {
       const docRef = await addDoc(collection(db, "projects"), {
         name: newProjectName,
         site: targetSite, zone: "未分類", updatedAt: new Date().toISOString(),
-        transactions: [], buyers: [], lands: [], buildings: []
+        transactions: [], buyers: [], lands: [], buildings: [],
+        isDeleted: false // 預設不是刪除狀態
       });
       setActiveSite(targetSite);
       setActiveProjectId(docRef.id);
@@ -257,38 +273,67 @@ const App = () => {
     } catch (error) { console.error(error); alert("建立失敗: " + error.message); }
   };
 
-  const deleteProject = async (e, projectId) => {
+  // ✅ 改寫：軟刪除 (移至垃圾桶)
+  const moveToTrash = async (e, projectId) => {
     e.stopPropagation();
-    if (!confirm('確定要永久刪除此案件嗎？此動作無法復原。')) return;
+    if (!confirm('確定要把此案件移至「資源回收桶」嗎？\n(管理員後續可以還原此案件)')) return;
     try { 
-      const projectToDelete = projects.find(p => p.id === projectId);
-      await deleteDoc(doc(db, "projects", projectId)); 
+      const projectToTrash = projects.find(p => p.id === projectId);
+      await updateDoc(doc(db, "projects", projectId), {
+        isDeleted: true,
+        deletedAt: new Date().toISOString(),
+        deletedBy: currentUser.email
+      });
       if (activeProjectId === projectId) setActiveProjectId(null); 
-      logAction('刪除', '案件資料', `永久刪除了案件: ${projectToDelete?.name || projectId}`);
+      logAction('刪除', '案件資料', `將案件移至垃圾桶: ${projectToTrash?.name || projectId}`);
     } catch (error) { console.error(error); alert("刪除失敗"); }
+  };
+
+  // ✅ 新增：還原案件
+  const restoreProject = async (projectId) => {
+    try {
+      const projectToRestore = projects.find(p => p.id === projectId);
+      await updateDoc(doc(db, "projects", projectId), {
+        isDeleted: false,
+        deletedAt: null,
+        deletedBy: null
+      });
+      logAction('編輯', '案件資料', `從垃圾桶還原了案件: ${projectToRestore?.name || projectId}`);
+    } catch (error) {
+      console.error(error); alert("還原失敗");
+    }
+  };
+
+  // ✅ 新增：永久刪除 (Hard Delete)
+  const hardDeleteProject = async (projectId) => {
+    if (!confirm('⚠️ 警告：您即將「永久刪除」此案件！\n此動作絕對無法復原，請確認是否繼續？')) return;
+    try {
+      const projectToDelete = projects.find(p => p.id === projectId);
+      await deleteDoc(doc(db, "projects", projectId));
+      logAction('永久刪除', '案件資料', `徹底且永久刪除了案件: ${projectToDelete?.name || projectId}`);
+    } catch (error) {
+      console.error(error); alert("永久刪除失敗");
+    }
   };
 
   const submitFeedback = async (e) => { e.preventDefault(); if (!newFeedback.trim()) return; try { await addDoc(collection(db, "feedbacks"), { content: newFeedback, createdAt: new Date().toISOString(), status: 'open' }); setNewFeedback(""); } catch (error) { console.error("Feedback Error:", error); alert("提交失敗"); } };
   const deleteFeedback = async (id) => { if (!confirm("確定移除？")) return; try { await deleteDoc(doc(db, "feedbacks", id)); } catch (error) { console.error("Delete Error:", error); } };
 
+  const handleLogout = async () => {
+    await logAction('登出', '系統存取', '登出系統');
+    signOut(auth);
+  };
+
+  // ==========================================
+  // Render 區塊
+  // ==========================================
+
   if (!currentUser) {
-    return (
-      <Login onLogin={(account) => {
-        setCurrentUser(account);
-        addDoc(collection(db, "audit_logs"), {
-          time: new Date().toLocaleString('zh-TW', { hour12: false }),
-          timestamp: Date.now(),
-          user: account,
-          action: '登入',
-          module: '系統存取',
-          details: '成功登入系統',
-          acknowledged: false 
-        });
-      }} />
-    );
+    return <Login />;
   }
 
-  if (showSummaryReport) return <div className="max-w-7xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans"><ProjectSummaryReport projects={projects} onBack={() => setShowSummaryReport(false)} /></div>;
+  // SummaryReport 改傳 activeProjects (不要印出垃圾桶的)
+  if (showSummaryReport) return <div className="max-w-7xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans"><ProjectSummaryReport projects={activeProjects} onBack={() => setShowSummaryReport(false)} /></div>;
   
   if (activeProjectId) return (
     <div className="max-w-6xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans">
@@ -312,12 +357,12 @@ const App = () => {
             <span className="font-bold text-sm tracking-wide">鼎龍資產管理系統</span>
           </div>
           <div className="flex items-center gap-4">
-             <span className="text-sm text-gray-300">目前登入：<span className="text-white font-bold">{currentUser}</span></span>
+             <span className="text-sm text-gray-300">
+               目前登入：<span className="text-white font-bold">{currentUser.email}</span>
+               {isAdmin && <span className="ml-2 bg-yellow-500 text-gray-900 px-2 py-0.5 rounded text-[10px] font-black uppercase">管理員</span>}
+             </span>
              <button 
-                onClick={() => {
-                   logAction('登出', '系統存取', '登出系統');
-                   setTimeout(() => setCurrentUser(null), 500);
-                }} 
+                onClick={handleLogout} 
                 className="bg-red-600 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-red-700 transition"
              >
                 安全登出
@@ -325,9 +370,47 @@ const App = () => {
           </div>
       </div>
 
-      <div className="max-w-6xl mx-auto p-6 md:p-12 flex-1 w-full">
+      <div className="max-w-6xl mx-auto p-6 md:p-12 flex-1 w-full relative">
         {errorMsg && <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-6 rounded shadow-sm"><div className="flex items-center gap-2 mb-2 font-bold text-red-700 text-lg"><AlertCircle className="w-6 h-6"/> 無法存取資料庫</div><p className="text-sm text-red-600 mb-4 font-bold">{errorMsg}</p></div>}
 
+        {/* 垃圾桶 Modal (管理員專屬) */}
+        {isAdmin && showTrashBin && (
+           <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 animate-fadeIn" onClick={() => setShowTrashBin(false)}>
+             <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6 border-b pb-4">
+                   <h3 className="font-black text-xl text-gray-800 flex items-center gap-2"><Trash className="w-6 h-6 text-red-500"/> 資源回收桶 (已刪除案件)</h3>
+                   <button onClick={() => setShowTrashBin(false)} className="p-2 hover:bg-gray-100 rounded-full"><X className="w-6 h-6"/></button>
+                </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-2">
+                   {trashedProjects.length === 0 ? (
+                      <div className="text-center text-gray-400 py-12 italic">目前垃圾桶是空的</div>
+                   ) : (
+                      <table className="w-full text-sm text-left">
+                        <thead className="bg-gray-50 text-gray-500 sticky top-0">
+                          <tr><th className="p-3">案件名稱</th><th className="p-3">案場</th><th className="p-3">刪除時間</th><th className="p-3">刪除者</th><th className="p-3 text-center">操作</th></tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {trashedProjects.map(p => (
+                            <tr key={p.id} className="hover:bg-red-50 transition">
+                              <td className="p-3 font-bold text-gray-700">{p.name}</td>
+                              <td className="p-3 text-gray-500">{p.site}</td>
+                              <td className="p-3 text-xs text-gray-400">{p.deletedAt ? new Date(p.deletedAt).toLocaleString() : ''}</td>
+                              <td className="p-3 text-xs text-gray-400">{p.deletedBy}</td>
+                              <td className="p-3 flex justify-center gap-2">
+                                <button onClick={() => restoreProject(p.id)} className="bg-green-100 text-green-700 px-3 py-1 rounded text-xs font-bold hover:bg-green-200 flex items-center gap-1"><ArchiveRestore className="w-3 h-3"/> 還原</button>
+                                <button onClick={() => hardDeleteProject(p.id)} className="bg-red-100 text-red-700 px-3 py-1 rounded text-xs font-bold hover:bg-red-200 flex items-center gap-1"><Trash2 className="w-3 h-3"/> 永久刪除</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                   )}
+                </div>
+             </div>
+           </div>
+        )}
+
+        {/* 仲介管理 Modal */}
         {showAgencyManager && (
            <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4" onClick={() => setShowAgencyManager(false)}>
              <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -377,7 +460,17 @@ const App = () => {
         )}
 
         <div className="animate-fadeIn flex flex-col items-center justify-center min-h-[60vh]">
-            <div className="text-center mb-12">
+            {/* 管理員專屬右上角按鈕區 */}
+            {isAdmin && (
+                <div className="absolute top-0 right-0 flex gap-2">
+                    <button onClick={() => setShowTrashBin(true)} className="flex items-center gap-2 bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-100 transition shadow-sm">
+                        <Trash className="w-4 h-4"/> 資源回收桶
+                        {trashedProjects.length > 0 && <span className="bg-red-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{trashedProjects.length}</span>}
+                    </button>
+                </div>
+            )}
+
+            <div className="text-center mb-12 mt-8 md:mt-0">
               <div className="bg-blue-600 p-4 rounded-3xl shadow-xl shadow-blue-200 inline-flex mb-6"><LayoutGrid className="w-12 h-12 text-white" /></div>
               <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight mb-2">多案場帳務管理系統</h1>
               <p className="text-gray-400 font-bold tracking-[0.3em] uppercase text-sm">Multi-Site Asset Management</p>
@@ -424,7 +517,8 @@ const App = () => {
                                  {filteredGroupedProjects[zone].map(p => (
                                    <div key={p.id} className="flex items-center justify-between p-3 pl-10 hover:bg-white border-t border-blue-50 group cursor-pointer" onClick={() => setActiveProjectId(p.id)}>
                                       <div className="flex items-center gap-2 text-sm font-medium text-gray-600 group-hover:text-blue-600"><Folder className="w-4 h-4 text-blue-300 group-hover:text-blue-500" />{p.name}</div>
-                                      <button onClick={(e) => deleteProject(e, p.id)} className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-full transition opacity-0 group-hover:opacity-100" title="刪除此案件"><Trash2 className="w-4 h-4" /></button>
+                                      {/* ✅ 改呼叫 moveToTrash 進行軟刪除 */}
+                                      <button onClick={(e) => moveToTrash(e, p.id)} className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-full transition opacity-0 group-hover:opacity-100" title="移至垃圾桶"><Trash2 className="w-4 h-4" /></button>
                                    </div>
                                  ))}
                                </div>
@@ -450,10 +544,11 @@ const App = () => {
               </div>
             </div>
 
-            {/* 系統使用紀錄區 */}
-            <div className="w-full max-w-4xl mt-10 print:hidden">
-                <AuditLogView logs={auditLogs} onAcknowledge={handleAcknowledgeLog} />
-            </div>
+            {isAdmin && (
+              <div className="w-full max-w-4xl mt-10 print:hidden">
+                  <AuditLogView logs={auditLogs} onAcknowledge={handleAcknowledgeLog} />
+              </div>
+            )}
 
         </div>
       </div>

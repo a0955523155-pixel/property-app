@@ -1,18 +1,29 @@
 import React, { useState } from 'react';
-import { Lock, User, ShieldAlert } from 'lucide-react';
+import { Lock, Mail, ShieldAlert } from 'lucide-react';
+// ✅ 引入 Firebase 的登入語法與設定
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../../config/firebase'; 
 
-const Login = ({ onLogin }) => {
-  const [account, setAccount] = useState('');
+const Login = () => {
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // 目前寫死您指定的帳號密碼，後續可擴充連線到資料庫
-    if (account === 'zxcvbnm7780' && password === 'p3926667') {
-      onLogin(account);
-    } else {
-      setError('帳號或密碼錯誤，請重新輸入。');
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      // ✅ 呼叫 Firebase 進行真實的驗證
+      await signInWithEmailAndPassword(auth, email, password);
+      // 注意：這裡不需要再呼叫 onLogin，因為 App.jsx 會自動監聽到登入成功
+    } catch (err) {
+      console.error('登入錯誤:', err);
+      setError('帳號或密碼錯誤，或是您沒有權限進入系統。');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -33,15 +44,16 @@ const Login = ({ onLogin }) => {
           )}
           
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">登入帳號</label>
+            <label className="block text-sm font-bold text-gray-700 mb-2">登入信箱 (Email)</label>
             <div className="relative">
-              <User className="w-5 h-5 text-gray-400 absolute left-3 top-3" />
+              <Mail className="w-5 h-5 text-gray-400 absolute left-3 top-3" />
               <input 
-                type="text" 
+                type="email" 
+                required
                 className="w-full pl-10 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-800 outline-none transition"
-                placeholder="請輸入帳號"
-                value={account}
-                onChange={(e) => setAccount(e.target.value)}
+                placeholder="請輸入公司配發的信箱"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
           </div>
@@ -52,6 +64,7 @@ const Login = ({ onLogin }) => {
               <Lock className="w-5 h-5 text-gray-400 absolute left-3 top-3" />
               <input 
                 type="password" 
+                required
                 className="w-full pl-10 p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-800 outline-none transition"
                 placeholder="請輸入密碼"
                 value={password}
@@ -62,9 +75,10 @@ const Login = ({ onLogin }) => {
 
           <button 
             type="submit" 
-            className="w-full bg-gray-800 text-white font-bold text-lg py-4 rounded-xl hover:bg-black transition-colors shadow-lg"
+            disabled={isLoading}
+            className="w-full bg-gray-800 text-white font-bold text-lg py-4 rounded-xl hover:bg-black transition-colors shadow-lg disabled:opacity-50 flex justify-center items-center gap-2"
           >
-            安全登入
+            {isLoading ? '驗證中...' : '安全登入'}
           </button>
         </form>
       </div>
