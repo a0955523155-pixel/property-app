@@ -14,13 +14,14 @@ const handleImageUploadGeneric = (file, callback) => {
 const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewImage, transactions, setTransactions, buildingGrandTotal }) => {
   // 狀態：控制是「新增模式」還是「編輯模式」
   const [isCreating, setIsCreating] = useState(false);
-  const [editingId, setEditingId] = useState(null); // 紀錄目前正在原地編輯哪一筆 ID
+  const [editingId, setEditingId] = useState(null); 
   
+  // 保留 today 變數，但不再強制作為預設值
   const today = new Date().toISOString().split('T')[0];
 
-  // 表單暫存資料
+  // ✅ 表單暫存資料：saleDate 預設改為空字串
   const [temp, setTemp] = useState({ 
-    saleDate: today, 
+    saleDate: "", 
     unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null 
   });
   const [seller, setSeller] = useState({ name: "", phone: "", address: "" });
@@ -31,7 +32,8 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
   // 儲存 (新增 或 更新)
   const save = () => { 
       if(!temp.address) return alert("請輸入地址"); 
-      const dataToSave = { ...temp, saleDate: temp.saleDate || today };
+      // ✅ 取消強制帶入 today，完全依照使用者輸入(包含留白)
+      const dataToSave = { ...temp };
 
       if(editingId) {
           // 更新現有
@@ -48,13 +50,15 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
   const cancelEdit = () => {
       setIsCreating(false);
       setEditingId(null);
-      setTemp({ saleDate: today, unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null });
+      // ✅ 重置時 saleDate 設為空字串
+      setTemp({ saleDate: "", unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null });
   };
 
   // 開啟「新增」表單 (在最上方)
   const startCreating = () => {
       setEditingId(null); // 關閉其他編輯
-      setTemp({ saleDate: today, unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null });
+      // ✅ 新增時 saleDate 設為空字串
+      setTemp({ saleDate: "", unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null });
       setIsCreating(true);
   };
   
@@ -62,13 +66,14 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
   const startEditing = (b) => { 
       setIsCreating(false); // 關閉新增
       setEditingId(b.id);   // 設定當前編輯 ID
-      setTemp({ ...b, saleDate: b.saleDate || today }); 
+      // ✅ 編輯舊資料時，沒日期就帶空字串
+      setTemp({ ...b, saleDate: b.saleDate || "" }); 
   };
   
   const del = (id) => { if(confirm("確定刪除此建物標的？")) setBuildings(buildings.filter(b=>b.id!==id)); };
   const getROCYear = (dateStr) => dateStr ? dateStr.split('-')[0] - 1911 : "";
 
-  // 抽離出共用的表單 UI (避免程式碼重複)
+  // 抽離出共用的表單 UI
   const renderForm = (isEditMode) => (
     <div className={`p-6 rounded-3xl shadow-xl border-2 ${isEditMode ? 'bg-orange-50 border-orange-400' : 'bg-white border-orange-200'} animate-fadeIn`}>
         <div className="flex justify-between items-center mb-6 border-b pb-4 border-orange-200">
@@ -80,7 +85,11 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
         
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">成交日期 (民國 {getROCYear(temp.saleDate)} 年)</label><input type="date" className="w-full p-3 border rounded-lg bg-white" value={temp.saleDate} onChange={e=>setTemp({...temp, saleDate: e.target.value})}/></div>
+                <div className="md:col-span-2">
+                    <label className="text-sm text-gray-500 block mb-2 font-bold">成交日期 {temp.saleDate ? `(民國 ${getROCYear(temp.saleDate)} 年)` : ''}</label>
+                    {/* ✅ 綁定 value 保證清除時會空白 */}
+                    <input type="date" className="w-full p-3 border rounded-lg bg-white" value={temp.saleDate || ''} onChange={e=>setTemp({...temp, saleDate: e.target.value})}/>
+                </div>
                 <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">戶號</label><input placeholder="例如：A1" className="w-full p-3 border rounded-lg font-bold text-blue-600" value={temp.unit} onChange={e=>setTemp({...temp, unit: e.target.value})}/></div>
                 <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">建照號碼</label><div className="flex gap-2"><input className="flex-1 w-full p-3 border rounded-lg" value={temp.permitNumber} onChange={e=>setTemp({...temp, permitNumber: e.target.value})}/><label className="cursor-pointer bg-gray-100 p-3 rounded-lg"><Camera className="w-4 h-4"/><input type="file" className="hidden" accept="image/*" onChange={(e)=>handleImageUploadGeneric(e.target.files[0], (res)=>setTemp({...temp, permitImage: res}))}/></label>{temp.permitImage && <button onClick={()=>setTemp({...temp, permitImage: null})} className="bg-red-50 text-red-500 p-3 rounded-lg"><X className="w-4 h-4"/></button>}</div></div>
                 <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">門牌地址</label><input className="w-full p-3 border rounded-lg" value={temp.address} onChange={e=>setTemp({...temp, address: e.target.value})}/></div>
@@ -112,17 +121,16 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
           </div>
        </div>
 
-       {/* 1. 新增區域：如果 isCreating 為 true，顯示表單，否則顯示按鈕 */}
+       {/* 1. 新增區域 */}
        {isCreating ? (
            renderForm(false)
        ) : (
            <button onClick={startCreating} className="w-full py-6 border-2 border-dashed rounded-2xl text-gray-400 hover:border-orange-500 hover:text-orange-500 flex justify-center items-center gap-2 transition bg-white shadow-sm text-lg font-bold"><Plus className="w-6 h-6"/> 新增建物案場資料</button>
        )}
        
-       {/* 2. 列表區域：迴圈渲染 */}
+       {/* 2. 列表區域 */}
        <div className="grid grid-cols-1 gap-6">
            {sortedBuildings.map(b => {
-               // ✅ 關鍵邏輯：如果這筆資料正在被編輯，就渲染「編輯表單」，否則渲染「一般卡片」
                if (editingId === b.id) {
                    return <div key={b.id}>{renderForm(true)}</div>;
                }
@@ -133,25 +141,23 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
                      <div className="flex-1">
                        <div className="flex items-center gap-2 mb-3">
                          <span className="bg-orange-100 text-orange-700 text-xs px-3 py-1 rounded-full font-bold">建物</span>
-                         {/* ✅ 修正：只顯示 A1 */}
                          <h4 className="font-black text-gray-900 text-3xl">{b.unit || "(未填寫)"}</h4>
                        </div>
                        
                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-base text-gray-500 bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-inner">
-                          {/* ✅ 地址顯示在內容區第一行 */}
                           <div className="md:col-span-3 border-b border-gray-200 pb-3 mb-1">
                              <span className="text-xs text-gray-400 block font-black uppercase mb-1">地址</span>
                              <span className="text-gray-800 font-bold text-lg">{b.address}</span>
                           </div>
                           
-                          <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">成交日期</span>{toROCDate(b.saleDate)}</div>
+                          {/* ✅ 若無日期顯示 '-' */}
+                          <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">成交日期</span>{b.saleDate ? toROCDate(b.saleDate) : '-'}</div>
                           <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">建號</span><div className="flex items-center gap-2">{b.buildNumber}{b.buildNoImage && <ImageIcon className="w-4 h-4 text-blue-500 cursor-pointer" onClick={()=>setPreviewImage(b.buildNoImage)}/>}</div></div>
                           <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">總額</span><span className="text-orange-600 font-bold text-xl">${Number(b.totalPrice).toLocaleString()}</span></div>
                        </div>
                      </div>
                      
                      <div className="flex gap-3 ml-4">
-                       {/* ✅ 點擊這裡：觸發 startEditing，介面原地變為表單 */}
                        <button onClick={()=>startEditing(b)} className="p-3 text-gray-300 hover:text-orange-600 transition hover:bg-orange-50 rounded-full"><Edit2 className="w-5 h-5"/></button>
                        <button onClick={()=>del(b.id)} className="p-3 text-gray-300 hover:text-red-500 transition hover:bg-red-50 rounded-full"><Trash2 className="w-5 h-5"/></button>
                      </div>

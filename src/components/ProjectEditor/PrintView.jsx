@@ -50,13 +50,13 @@ const PrintView = ({
             )}
         </div>
         
-        {/* ==================== PAGE 2: 專案團隊 (✅ 升級：多筆請款列印) ==================== */}
+        {/* ==================== PAGE 2: 專案團隊 ==================== */}
         {printConfig.team && (
              <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
                <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">專案團隊資訊</h2>
                <table className="w-full border-collapse border-2 border-black table-fixed text-xs">
-                 {projectTeams.map(t => (
-                    <tbody key={t.id} className="break-inside-avoid border-b-2 border-black">
+                 {projectTeams.map((t, tIdx) => (
+                    <tbody key={t.id || `team-${tIdx}`} className="break-inside-avoid border-b-2 border-black">
                         <tr className="bg-gray-50 border-b border-gray-300">
                             <td rowSpan={3} className="border-r border-black p-2 font-black text-center align-middle text-xl w-[50px] bg-gray-100">{t.unit}</td>
                             <td className="p-2 border-r border-gray-300 w-1/2"><Label>仲介公司</Label><span className="font-bold">{t.agency}</span></td>
@@ -67,7 +67,6 @@ const PrintView = ({
                                 <Label>開發業務</Label><span className="font-bold">{t.developer}</span>
                                 <div className="mt-0.5 ml-1 text-gray-500 text-[10px]">合約: {t.developerType} {t.developerNo}</div>
                                 
-                                {/* 開發發票明細列印 */}
                                 {(t.devServiceFee || (t.devInvoices && t.devInvoices.length > 0)) && (
                                     <div className="mt-3 pt-2 border-t border-dashed border-gray-300">
                                         <div className="text-blue-700 font-bold mb-1 text-[10px]">▼ 開發發票與請款</div>
@@ -80,7 +79,7 @@ const PrintView = ({
                                                 </thead>
                                                 <tbody>
                                                     {t.devInvoices.map((inv, i) => (
-                                                        <tr key={i}>
+                                                        <tr key={inv.id || `dev-${i}`}>
                                                             <td className="border p-1 text-center">{inv.date ? toROCDate(inv.date) : '-'}</td>
                                                             <td className="border p-1 text-center">{inv.invoiceNo || '-'}</td>
                                                             <td className="border p-1">{inv.details || '-'}</td>
@@ -98,7 +97,6 @@ const PrintView = ({
                                 <Label>行銷業務</Label><span className="font-bold">{t.marketer}</span>
                                 <div className="mt-0.5 ml-1 text-gray-500 text-[10px]">單據: {t.marketerNo}</div>
                                 
-                                {/* 行銷發票明細列印 */}
                                 {(t.marServiceFee || (t.marInvoices && t.marInvoices.length > 0)) && (
                                     <div className="mt-3 pt-2 border-t border-dashed border-gray-300">
                                         <div className="text-purple-700 font-bold mb-1 text-[10px]">▼ 行銷發票與請款</div>
@@ -111,7 +109,7 @@ const PrintView = ({
                                                 </thead>
                                                 <tbody>
                                                     {t.marInvoices.map((inv, i) => (
-                                                        <tr key={i}>
+                                                        <tr key={inv.id || `mar-${i}`}>
                                                             <td className="border p-1 text-center">{inv.date ? toROCDate(inv.date) : '-'}</td>
                                                             <td className="border p-1 text-center">{inv.invoiceNo || '-'}</td>
                                                             <td className="border p-1">{inv.details || '-'}</td>
@@ -141,8 +139,8 @@ const PrintView = ({
                <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">買受人資訊</h2>
                {buyers.length > 0 ? (
                  <table className="w-full border-collapse border-2 border-black table-fixed text-xs">
-                   {sortedBuyers.map(b => (
-                     <tbody key={b.id} className="break-inside-avoid border-b-2 border-black">
+                   {sortedBuyers.map((b, idx) => (
+                     <tbody key={b.id || `buyer-${idx}`} className="break-inside-avoid border-b-2 border-black">
                         <tr className="bg-gray-50 border-b border-gray-300">
                             <td rowSpan={3} className="border-r border-black p-2 font-black text-center align-middle text-xl w-[50px] bg-gray-100">{b.unit}</td>
                             <td className="p-2 border-r border-gray-300 w-1/2"><Label>買方姓名</Label><span className="font-bold text-sm align-middle">{b.name}</span></td>
@@ -173,7 +171,7 @@ const PrintView = ({
              <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4 break-before-page" style={{ pageBreakBefore: 'always' }}>土地標的詳細清單</h2>
              
              {lands.length > 0 ? lands.filter(l => visibleLandIds.includes(l.id)).map((l, index) => (
-               <div key={l.id} style={index === 0 ? {} : { pageBreakBefore: 'always' }} className="mb-8">
+               <div key={l.id || `land-${index}`} style={index === 0 ? {} : { pageBreakBefore: 'always' }} className="mb-8">
                  
                  <table className="w-full border-collapse table-fixed text-xs">
                     <thead>
@@ -193,7 +191,7 @@ const PrintView = ({
                         </tr>
                     </thead>
 
-                    {l.items.map(item => {
+                    {l.items.map((item, itemIdx) => {
                        const rawM2 = Number(item.areaM2)||0;
                        const num = Number(item.shareNum)||0;
                        const denom = Number(item.shareDenom)||1;
@@ -201,7 +199,7 @@ const PrintView = ({
                        const hPing = item.detailPing || toPing(hM2).toFixed(3);
                        
                        return (
-                         <tbody key={item.id} className="border-2 border-black border-t-0 break-inside-avoid">
+                         <tbody key={item.id || `l-item-${itemIdx}`} className="border-2 border-black border-t-0 break-inside-avoid">
                             <tr className="bg-gray-100 border-b border-gray-300">
                                 <td className="p-2 border-r border-gray-300 w-[40px] text-center align-middle">
                                     <span className="font-black text-lg">{item.unit}</span>
@@ -259,8 +257,8 @@ const PrintView = ({
                 <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">建物標的清單</h2>
                 {buildings.length > 0 ? (
                   <table className="w-full border-collapse border-2 border-black table-fixed text-xs">
-                    {sortedBuildings.map(b => (
-                        <tbody key={b.id} className="break-inside-avoid border-b-2 border-black">
+                    {sortedBuildings.map((b, idx) => (
+                        <tbody key={b.id || `build-${idx}`} className="break-inside-avoid border-b-2 border-black">
                             <tr className="bg-gray-50 border-b border-gray-300">
                                 <td rowSpan={4} className="border-r border-black p-2 font-black text-center align-middle text-xl w-[50px] bg-gray-100">{b.unit}</td>
                                 <td className="p-2 border-r border-gray-300 w-[160px]"><Label>成交日期</Label><span className="font-mono text-sm align-middle">{b.saleDate ? toROCDate(b.saleDate) : ''}</span></td>
@@ -305,8 +303,8 @@ const PrintView = ({
                 {handoverData
                     .filter(h => visibleHandoverUnits.includes(h.unit))
                     .sort((a, b) => (a.unit || "").localeCompare(b.unit || "", "zh-Hant", { numeric: true }))
-                    .map(h => (
-                    <div key={h.id} className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
+                    .map((h, idx) => (
+                    <div key={h.id || `handover-${idx}`} className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
                         <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">交屋點交確認單 - 戶號: {h.unit}</h2>
                         <div className="grid grid-cols-2 gap-0 border-2 border-gray-400 text-sm">
                             <div className="p-4 border-r border-b border-gray-400 flex justify-between"><span className="font-bold">點交日期</span> <span>{h.handoverDate ? toROCDate(h.handoverDate) : ''}</span></div>
@@ -334,7 +332,7 @@ const PrintView = ({
             <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
                 <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">收支明細</h2>
                 <div className="space-y-6">
-                  {['general', 'land', 'building', 'buyer'].map(type => {
+                  {['general', 'land', 'building', 'buyer'].map((type, tIdx) => {
                       if (!visibleLedgers[type]) return null;
                       const subData = groupedTransactions[type];
                       if(subData.length === 0) return null;
@@ -343,7 +341,7 @@ const PrintView = ({
                       const net = (subStats?.income || 0) - (subStats?.expense || 0);
 
                       return (
-                        <div key={type} className="mb-6 break-inside-avoid">
+                        <div key={type || `fin-${tIdx}`} className="mb-6 break-inside-avoid">
                           <h3 className="font-bold text-base bg-gray-200 p-2 border-2 border-gray-400 border-b-0">{label}</h3>
                           <table className="w-full text-xs border-collapse border-2 border-gray-400">
                             <thead>
@@ -355,8 +353,8 @@ const PrintView = ({
                               </tr>
                             </thead>
                             <tbody>
-                                {subData.map(t => (
-                                  <tr key={t.id}>
+                                {subData.map((t, idx) => (
+                                  <tr key={t.id || `tx-${idx}`}>
                                     <td className="border border-gray-400 p-2 align-top whitespace-nowrap">{t.date ? toROCDate(t.date) : ''}</td>
                                     <td className="border border-gray-400 p-2 align-top whitespace-nowrap">{t.category}</td>
                                     <td className="border border-gray-400 p-2 align-top whitespace-normal break-words">{t.note}</td>
@@ -386,10 +384,10 @@ const PrintView = ({
         {printConfig.requisition && (
             <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
                 <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">請款單明細</h2>
-                {requisitions.length > 0 ? Object.keys(groupedRequisitions).map(shareholder => {
+                {requisitions.length > 0 ? Object.keys(groupedRequisitions).map((shareholder, sIdx) => {
                   let subTotal = 0;
                   return (
-                      <div key={shareholder} className="mb-6 break-inside-avoid">
+                      <div key={shareholder || `req-group-${sIdx}`} className="mb-6 break-inside-avoid">
                         <h3 className="font-bold text-base bg-gray-200 p-2 border-2 border-gray-400 border-b-0">股東: {shareholder}</h3>
                         <table className="w-full text-xs border-collapse border-2 border-gray-400">
                             <thead>
@@ -402,13 +400,13 @@ const PrintView = ({
                               </tr>
                             </thead>
                             <tbody>
-                                {groupedRequisitions[shareholder].map(r => {
+                                {groupedRequisitions[shareholder].map((r, rIdx) => {
                                   const isIncome = r.type === 'income';
                                   const amt = Number(r.amount) || 0;
                                   const signAmt = isIncome ? amt : -amt;
                                   subTotal += signAmt;
                                   return (
-                                    <tr key={r.id}>
+                                    <tr key={r.id || `req-${rIdx}`}>
                                       <td className="border border-gray-400 p-2 align-top whitespace-nowrap">{r.date ? toROCDate(r.date) : ''}</td>
                                       <td className={`border border-gray-400 p-2 align-top whitespace-nowrap font-bold ${isIncome?'text-red-600':'text-blue-600'}`}>{isIncome?'收入':'支出'}</td>
                                       <td className="border border-gray-400 p-2 text-xs align-top whitespace-normal break-words">{r.target}</td>

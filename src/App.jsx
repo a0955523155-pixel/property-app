@@ -4,49 +4,25 @@ import {
   Trash2, CheckCircle2, MessageSquarePlus, Send, ChevronDown, ChevronRight, PieChart, Building2, Folder, Tag, Users, Settings, Plus, X
 } from 'lucide-react';
 
-// --- 引入設定檔 ---
 import { db, auth } from './config/firebase';
-
-// --- 引入 Firestore 與 Auth ---
-// ✅ 新增 limit 匯入，用來限制讀取筆數
 import { 
   collection, doc, updateDoc, addDoc, deleteDoc, getDoc, setDoc,
   onSnapshot, query, orderBy, limit 
 } from "firebase/firestore";
-import { 
-  signInAnonymously, onAuthStateChanged 
-} from "firebase/auth";
+import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 
-// --- 引入子元件 ---
 import ProjectEditor from './components/ProjectEditor';
 import ProjectSummaryReport from './components/ProjectSummaryReport';
 import Login from './components/Auth/Login';
 import AuditLogView from './components/Auth/AuditLogView';
 
-// --- CSS Styles ---
 const APP_STYLES = `
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .animate-fadeIn {
-    animation: fadeIn 0.5s ease-out forwards;
-  }
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-track {
-    background: #f1f1f1; 
-    border-radius: 4px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #ccc; 
-    border-radius: 4px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: #aaa; 
-  }
-  
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .animate-fadeIn { animation: fadeIn 0.5s ease-out forwards; }
+  .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+  .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #aaa; }
   @media print {
     @page { size: A4 portrait; margin: 10mm; }
     body, #root, .app-wrapper { background-color: white !important; height: auto !important; overflow: visible !important; font-size: 10pt !important; }
@@ -84,45 +60,49 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // ✅ 修改：將操作紀錄寫入 Firebase，永久保存
   const logAction = async (action, module, details) => {
     try {
       await addDoc(collection(db, "audit_logs"), {
         time: new Date().toLocaleString('zh-TW', { hour12: false }),
-        timestamp: Date.now(), // 加入時間戳記確保排序正確
+        timestamp: Date.now(),
         user: currentUser || '系統',
         action, 
         module, 
-        details
+        details,
+        acknowledged: false 
       });
     } catch (error) {
       console.error("無法寫入使用紀錄:", error);
     }
   };
 
-  // ✅ 修改：監聽事件 & 讀取雲端歷史紀錄
+  // ✅ 修正：強制將 logId 轉為字串，防止 Firebase 報錯
+  const handleAcknowledgeLog = async (logId) => {
+    if (!logId) return;
+    try {
+      const logRef = doc(db, "audit_logs", String(logId));
+      await updateDoc(logRef, {
+        acknowledged: true
+      });
+    } catch (error) {
+      console.error("確認失敗:", error);
+      alert("確認失敗，請檢查網路連線。");
+    }
+  };
+
   useEffect(() => {
     if (!currentUser) return; 
 
-    // 1. 攔截列印
-    const handlePrint = () => {
-      logAction('列印', '系統操作', '執行了列印報表/匯出PDF');
-    };
+    const handlePrint = () => { logAction('列印', '系統操作', '執行了列印報表/匯出PDF'); };
 
-    // 2. 攔截截圖快捷鍵
     const handleKeyDown = (e) => {
-      if (e.key === 'PrintScreen') {
-        logAction('截圖', '系統操作', '按下了 PrintScreen 截圖鍵');
-      }
-      if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4')) {
-        logAction('截圖', '系統操作', '使用了 Mac 快捷鍵截圖');
-      }
+      if (e.key === 'PrintScreen') { logAction('截圖', '系統操作', '按下了 PrintScreen 截圖鍵'); }
+      if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4')) { logAction('截圖', '系統操作', '使用了 Mac 快捷鍵截圖'); }
     };
 
     window.addEventListener('beforeprint', handlePrint);
     window.addEventListener('keyup', handleKeyDown);
 
-    // 3. ✅ 讀取並持續監聽 Firebase 上的使用紀錄 (最多抓最近 200 筆)
     const qLogs = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(200));
     const unsubLogs = onSnapshot(qLogs, (snapshot) => {
       setAuditLogs(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -131,11 +111,10 @@ const App = () => {
     return () => {
       window.removeEventListener('beforeprint', handlePrint);
       window.removeEventListener('keyup', handleKeyDown);
-      unsubLogs(); // 清除 Firebase 監聽
+      unsubLogs(); 
     };
-  }, [currentUser]); // 依賴 currentUser，登入後才開始監聽
+  }, [currentUser]);
 
-  // 0. 注入樣式
   useEffect(() => {
     const styleTag = document.createElement("style");
     styleTag.textContent = APP_STYLES;
@@ -143,7 +122,6 @@ const App = () => {
     return () => { if(document.head.contains(styleTag)){ document.head.removeChild(styleTag); } }
   }, []);
 
-  // 1. 認證與監聽
   useEffect(() => {
     const initAuth = async () => { try { await signInAnonymously(auth); setErrorMsg(null); } catch (err) { console.error("Login Error:", err); setErrorMsg("登入失敗"); } };
     initAuth();
@@ -151,7 +129,6 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // 2. 監聽 Firestore (Projects & Feedbacks)
   useEffect(() => {
     if (!user) return; 
     const q = query(collection(db, "projects"), orderBy("name", "asc"));
@@ -168,7 +145,6 @@ const App = () => {
     return () => { unsubscribe(); unsubFeed(); };
   }, [user]);
 
-  // 3. 監聽 Firestore (Agency Settings)
   useEffect(() => {
     if (!user) return;
     const agencyDocRef = doc(db, "settings", "agency_list");
@@ -184,14 +160,9 @@ const App = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // --- 仲介管理功能 ---
   const saveAgencyDB = async (newDB) => {
-    try {
-      await setDoc(doc(db, "settings", "agency_list"), newDB);
-    } catch (error) {
-      console.error("Save Agency Error:", error);
-      alert("儲存失敗：" + error.message);
-    }
+    try { await setDoc(doc(db, "settings", "agency_list"), newDB); } 
+    catch (error) { console.error("Save Agency Error:", error); alert("儲存失敗：" + error.message); }
   };
 
   const handleAddAgency = () => {
@@ -226,7 +197,6 @@ const App = () => {
     saveAgencyDB(newDB); 
   };
 
-  // --- 邏輯處理 ---
   const uniqueSites = useMemo(() => {
     const sites = projects.map(p => p.site || "大成工業城");
     const unique = [...new Set(sites)].sort();
@@ -266,9 +236,7 @@ const App = () => {
       const { id, ...data } = updatedProject;
       const projectRef = doc(db, "projects", id);
       await updateDoc(projectRef, { ...data, updatedAt: new Date().toISOString() });
-      
       logAction('編輯', '案件資料', `編輯了案件: ${updatedProject.name}`);
-
     } catch (error) { console.error(error); alert("儲存失敗: " + error.message); }
   };
 
@@ -285,9 +253,7 @@ const App = () => {
       });
       setActiveSite(targetSite);
       setActiveProjectId(docRef.id);
-      
       logAction('新增', '案件資料', `在 [${targetSite}] 建立了: ${newProjectName}`);
-
     } catch (error) { console.error(error); alert("建立失敗: " + error.message); }
   };
 
@@ -298,39 +264,29 @@ const App = () => {
       const projectToDelete = projects.find(p => p.id === projectId);
       await deleteDoc(doc(db, "projects", projectId)); 
       if (activeProjectId === projectId) setActiveProjectId(null); 
-      
       logAction('刪除', '案件資料', `永久刪除了案件: ${projectToDelete?.name || projectId}`);
-
     } catch (error) { console.error(error); alert("刪除失敗"); }
   };
 
   const submitFeedback = async (e) => { e.preventDefault(); if (!newFeedback.trim()) return; try { await addDoc(collection(db, "feedbacks"), { content: newFeedback, createdAt: new Date().toISOString(), status: 'open' }); setNewFeedback(""); } catch (error) { console.error("Feedback Error:", error); alert("提交失敗"); } };
   const deleteFeedback = async (id) => { if (!confirm("確定移除？")) return; try { await deleteDoc(doc(db, "feedbacks", id)); } catch (error) { console.error("Delete Error:", error); } };
 
-
-  // ==========================================
-  // ✅ 渲染區塊 (Render)
-  // ==========================================
-
-  // 1. 如果尚未登入，顯示登入頁面
   if (!currentUser) {
     return (
       <Login onLogin={(account) => {
         setCurrentUser(account);
-        // ✅ 改為將「登入動作」非同步寫入資料庫，不再寫入暫存
         addDoc(collection(db, "audit_logs"), {
           time: new Date().toLocaleString('zh-TW', { hour12: false }),
           timestamp: Date.now(),
           user: account,
           action: '登入',
           module: '系統存取',
-          details: '成功登入系統'
+          details: '成功登入系統',
+          acknowledged: false 
         });
       }} />
     );
   }
-
-  // 以下為已登入狀態的渲染
 
   if (showSummaryReport) return <div className="max-w-7xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans"><ProjectSummaryReport projects={projects} onBack={() => setShowSummaryReport(false)} /></div>;
   
@@ -350,8 +306,6 @@ const App = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-      
-      {/* 頂部登入者狀態列 (列印時隱藏) */}
       <div className="bg-gray-800 text-white p-3 px-6 flex justify-between items-center print:hidden shadow-md z-50">
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
@@ -362,7 +316,7 @@ const App = () => {
              <button 
                 onClick={() => {
                    logAction('登出', '系統存取', '登出系統');
-                   setTimeout(() => setCurrentUser(null), 500); // 稍微延遲一下讓紀錄寫入
+                   setTimeout(() => setCurrentUser(null), 500);
                 }} 
                 className="bg-red-600 px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-red-700 transition"
              >
@@ -374,7 +328,6 @@ const App = () => {
       <div className="max-w-6xl mx-auto p-6 md:p-12 flex-1 w-full">
         {errorMsg && <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-6 rounded shadow-sm"><div className="flex items-center gap-2 mb-2 font-bold text-red-700 text-lg"><AlertCircle className="w-6 h-6"/> 無法存取資料庫</div><p className="text-sm text-red-600 mb-4 font-bold">{errorMsg}</p></div>}
 
-        {/* 仲介管理 Modal */}
         {showAgencyManager && (
            <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4" onClick={() => setShowAgencyManager(false)}>
              <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -433,7 +386,6 @@ const App = () => {
             <div className="w-full max-w-lg bg-white p-8 rounded-[2.5rem] shadow-xl border border-gray-100 relative overflow-hidden group hover:shadow-2xl transition-all duration-500">
                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 to-purple-500" />
                
-               {/* 步驟 1: 選擇大案場 */}
                <label className="block text-gray-500 text-xs font-bold uppercase tracking-widest mb-2 ml-1">步驟 1: 選擇案場 (Site)</label>
                <div className="relative mb-6">
                   <select 
@@ -451,7 +403,6 @@ const App = () => {
                   <ChevronDown className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />
                </div>
 
-               {/* 步驟 2: 選擇案件 */}
                <div className={`transition-all duration-500 ${activeSite ? 'opacity-100 max-h-[500px]' : 'opacity-50 max-h-0 overflow-hidden'}`}>
                   <div className="flex justify-between items-center mb-2 ml-1">
                      <label className="text-gray-500 text-xs font-bold uppercase tracking-widest">步驟 2: 選擇案件 (Project)</label>
@@ -490,7 +441,6 @@ const App = () => {
                </div>
             </div>
             
-            {/* 問題回饋區 */}
             <div className="w-full max-w-4xl mt-20 print:hidden">
               <div className="bg-yellow-50/80 border-2 border-yellow-200 rounded-[2rem] p-8 shadow-lg relative overflow-hidden backdrop-blur-sm">
                 <div className="absolute top-0 right-0 w-24 h-24 bg-yellow-200 rounded-bl-full opacity-50 -mr-10 -mt-10"></div>
@@ -502,7 +452,7 @@ const App = () => {
 
             {/* 系統使用紀錄區 */}
             <div className="w-full max-w-4xl mt-10 print:hidden">
-                <AuditLogView logs={auditLogs} />
+                <AuditLogView logs={auditLogs} onAcknowledge={handleAcknowledgeLog} />
             </div>
 
         </div>
