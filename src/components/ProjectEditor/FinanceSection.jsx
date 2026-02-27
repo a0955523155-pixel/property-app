@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { DollarSign, Edit2, Trash2, Camera, X, ImageIcon, Save, Plus } from 'lucide-react';
 import { CATEGORIES, toROCDate } from '../../utils/helpers';
 
-// ✅ 1. 獨立的編輯表單元件 (解決注音輸入跳字/失去焦點的問題)
+// 獨立的編輯表單元件
 const TransactionEditForm = ({ 
   data, onChange, onSave, onCancel, 
   lands, buildings, buyers, 
@@ -13,7 +13,7 @@ const TransactionEditForm = ({
             <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
                 <div>
                     <label className="text-xs font-black block mb-2 text-gray-600">日期</label>
-                    <input type="date" className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.date} onChange={e => onChange('date', e.target.value)}/>
+                    <input type="date" className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.date || ''} onChange={e => onChange('date', e.target.value)}/>
                 </div>
                 <div>
                     <label className="text-xs font-black block mb-2 text-gray-600">類型</label>
@@ -52,7 +52,7 @@ const TransactionEditForm = ({
                 </div>
                 <div>
                     <label className="text-xs font-black block mb-2 text-gray-600">金額</label>
-                    <input type="number" className="w-full p-2 border rounded-lg font-bold outline-none focus:border-blue-400 text-right" placeholder="0" value={data.amount} onChange={e => onChange('amount', e.target.value)}/>
+                    <input type="number" className="w-full p-2 border rounded-lg font-bold outline-none focus:border-blue-400 text-right" placeholder="0" value={data.amount || ''} onChange={e => onChange('amount', e.target.value)}/>
                 </div>
             </div>
             
@@ -60,7 +60,7 @@ const TransactionEditForm = ({
                 <input 
                     className="flex-1 p-2 border rounded-lg outline-none focus:border-blue-400 bg-gray-50 focus:bg-white transition-colors" 
                     placeholder="輸入備註說明..." 
-                    value={data.note} 
+                    value={data.note || ''} 
                     onChange={e => onChange('note', e.target.value)}
                 />
                 
@@ -79,12 +79,11 @@ const TransactionEditForm = ({
     );
 };
 
-// ✅ 2. 財務表格元件 (接收 props，並將獨立的 Form 渲染進來)
+// 財務表格元件
 const TransactionTable = ({ 
   data, typeLabel, colorTheme, subStats, 
   editingTxId, startEditing, 
   setTransactions, transactions, setPreviewImage,
-  // 傳遞給 Form 的必要 props
   editData, handleEditChange, saveTransaction, cancelEdit,
   lands, buildings, buyers, handleImageUploadGeneric
 }) => {
@@ -97,7 +96,6 @@ const TransactionTable = ({
                 <thead className="text-xs text-gray-400 bg-gray-50 uppercase tracking-wider"><tr><th className="p-4 w-28 whitespace-nowrap">日期</th><th className="p-4 w-32 whitespace-nowrap">類型</th><th className="p-4 min-w-[200px]">項目 / 對象 / 備註</th><th className="p-4 text-right w-32 whitespace-nowrap">金額</th><th className="p-4 w-16 text-center print:hidden">操作</th></tr></thead>
                 <tbody className="divide-y divide-gray-100">
                     {data.map(t => { 
-                        // 原地編輯
                         if (editingTxId === t.id) {
                             return (
                                 <tr key={t.id}>
@@ -117,7 +115,8 @@ const TransactionTable = ({
 
                         return (
                             <tr key={t.id} className="hover:bg-gray-50 group transition-colors">
-                                <td className="p-4 text-gray-500 font-mono text-sm whitespace-nowrap">{toROCDate(t.date)}</td>
+                                {/* 若沒日期就留白 */}
+                                <td className="p-4 text-gray-500 font-mono text-sm whitespace-nowrap">{t.date ? toROCDate(t.date) : ''}</td>
                                 <td className="p-4 whitespace-nowrap"><span className={`px-3 py-1.5 rounded-full text-xs font-bold ${t.type==='income'?'bg-red-100 text-red-600':'bg-blue-100 text-blue-600'}`}>{t.category}</span></td>
                                 <td className="p-4"><span className="text-gray-700 font-medium">{t.note || "-"}</span>{t.image && <button onClick={() => setPreviewImage(t.image)} className="text-xs text-blue-500 hover:text-blue-700 font-bold flex items-center gap-1 mt-1 whitespace-nowrap"><ImageIcon className="w-3 h-3"/> 憑證</button>}</td>
                                 <td className={`p-4 text-right font-mono font-black text-base whitespace-nowrap ${t.type==='income'?'text-red-600':'text-blue-600'}`}>{t.type==='expense' && '-'}{Number(t.amount).toLocaleString()}</td>
@@ -138,23 +137,21 @@ const TransactionTable = ({
     );
 };
 
-// ✅ 主元件
+// 主元件
 const FinanceSection = ({ transactions, setTransactions, stats, groupedTransactions, lands, buildings, buyers, visibleLedgers, setVisibleLedgers, handleImageUploadGeneric, setPreviewImage }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [editingTxId, setEditingTxId] = useState(null);
-  const today = new Date().toISOString().split('T')[0];
   
-  // 統一管理暫存資料
-  const [newTx, setNewTx] = useState({ date: today, type: 'expense', category: CATEGORIES.expense[0], amount: '', note: '', image: null, linkedId: null, linkedType: 'general' });
+  // ✅ 預設 date: '' 不再帶入 today
+  const [newTx, setNewTx] = useState({ date: '', type: 'expense', category: CATEGORIES.expense[0], amount: '', note: '', image: null, linkedId: null, linkedType: 'general' });
 
-  // 處理暫存資料更新 (不會讓整個表單重新掛載)
   const handleEditChange = (field, value) => {
       setNewTx(prev => ({ ...prev, [field]: value }));
   };
 
   const startCreating = () => {
       setEditingTxId(null);
-      setNewTx({ date: today, type: 'expense', category: CATEGORIES.expense[0], amount: '', note: '', image: null, linkedId: null, linkedType: 'general' });
+      setNewTx({ date: '', type: 'expense', category: CATEGORIES.expense[0], amount: '', note: '', image: null, linkedId: null, linkedType: 'general' });
       setIsCreating(true);
   };
 
@@ -176,6 +173,7 @@ const FinanceSection = ({ transactions, setTransactions, stats, groupedTransacti
       const parsedAmount = Number(newTx.amount);
       if (isNaN(parsedAmount)) return alert("金額必須為數字");
       
+      // ✅ 儲存時直接寫入，如果沒有日期就是空白字串
       if (editingTxId) {
           setTransactions(transactions.map(t => t.id === editingTxId ? { ...newTx, id: t.id, amount: parsedAmount } : t));
       } else {
@@ -187,14 +185,12 @@ const FinanceSection = ({ transactions, setTransactions, stats, groupedTransacti
 
   return (
     <div className="space-y-8 animate-fadeIn relative">
-        {/* 頂部統計 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-center h-32"><div className="text-sm text-gray-400 font-black uppercase text-center">總收入</div><div className="text-4xl font-black text-red-600 text-center">${stats.totalIncome.toLocaleString()}</div></div>
             <div className="bg-white p-6 rounded-2xl shadow-sm border flex flex-col justify-center h-32"><div className="text-sm text-gray-400 font-black uppercase text-center">總支出</div><div className="text-4xl font-black text-blue-600 text-center">${stats.totalExpense.toLocaleString()}</div></div>
             <div className={`p-6 rounded-2xl shadow-xl flex flex-col justify-center h-32 ${stats.netProfit >= 0 ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'}`}><div className="text-sm text-white/60 font-black uppercase text-center">淨利 (ROI: {stats.roi}%)</div><div className="text-4xl font-black text-center">${stats.netProfit.toLocaleString()}</div></div>
         </div>
         
-        {/* 過濾器與新增按鈕 */}
         <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="bg-gray-50 border rounded-xl p-4 flex flex-wrap gap-6 flex-1">
                 <label className="flex gap-2 font-bold cursor-pointer"><input type="checkbox" checked={visibleLedgers.general} onChange={(e)=>setVisibleLedgers({...visibleLedgers, general: e.target.checked})} />一般</label>
@@ -210,7 +206,6 @@ const FinanceSection = ({ transactions, setTransactions, stats, groupedTransacti
             )}
         </div>
 
-        {/* 新增表單 (置頂顯示) */}
         {isCreating && (
             <div className="mb-8">
                 <TransactionEditForm 
@@ -224,7 +219,6 @@ const FinanceSection = ({ transactions, setTransactions, stats, groupedTransacti
             </div>
         )}
 
-        {/* 帳目列表 */}
         {visibleLedgers.general && <TransactionTable data={groupedTransactions.general} typeLabel="一般專案收支" colorTheme="border-gray-200" subStats={stats.subTotals.general} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} editData={newTx} handleEditChange={handleEditChange} saveTransaction={saveTransaction} cancelEdit={cancelEdit} lands={lands} buildings={buildings} buyers={buyers} handleImageUploadGeneric={handleImageUploadGeneric} />}
         {visibleLedgers.land && <TransactionTable data={groupedTransactions.land} typeLabel="土地出售人帳目" colorTheme="border-blue-200" subStats={stats.subTotals.land} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} editData={newTx} handleEditChange={handleEditChange} saveTransaction={saveTransaction} cancelEdit={cancelEdit} lands={lands} buildings={buildings} buyers={buyers} handleImageUploadGeneric={handleImageUploadGeneric} />}
         {visibleLedgers.building && <TransactionTable data={groupedTransactions.building} typeLabel="建物出售人帳目" colorTheme="border-orange-200" subStats={stats.subTotals.building} editingTxId={editingTxId} startEditing={startEditing} setTransactions={setTransactions} transactions={transactions} setPreviewImage={setPreviewImage} editData={newTx} handleEditChange={handleEditChange} saveTransaction={saveTransaction} cancelEdit={cancelEdit} lands={lands} buildings={buildings} buyers={buyers} handleImageUploadGeneric={handleImageUploadGeneric} />}

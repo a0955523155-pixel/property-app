@@ -50,7 +50,7 @@ const PrintView = ({
             )}
         </div>
         
-        {/* ==================== PAGE 2: 專案團隊 (✅ 加入請款明細列印) ==================== */}
+        {/* ==================== PAGE 2: 專案團隊 (✅ 升級：多筆請款列印) ==================== */}
         {printConfig.team && (
              <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
                <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">專案團隊資訊</h2>
@@ -67,18 +67,30 @@ const PrintView = ({
                                 <Label>開發業務</Label><span className="font-bold">{t.developer}</span>
                                 <div className="mt-0.5 ml-1 text-gray-500 text-[10px]">合約: {t.developerType} {t.developerNo}</div>
                                 
-                                {/* 判斷是否有填寫開發請款資料，有填才顯示列印 */}
-                                {(t.devInvoiceNo || t.devServiceFee || t.devPaymentDate || t.devAmount || t.devSubtotal || t.devDetails) && (
-                                    <div className="mt-2 pt-2 border-t border-dashed border-gray-300 text-[10px]">
-                                        <div className="text-blue-700 font-bold mb-1">▼ 開發發票與請款</div>
-                                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-gray-700">
-                                            <div><span className="text-gray-400">日期:</span> {t.devPaymentDate ? toROCDate(t.devPaymentDate) : '-'}</div>
-                                            <div><span className="text-gray-400">發票:</span> {t.devInvoiceNo || '-'}</div>
-                                            <div><span className="text-gray-400">服務費:</span> {t.devServiceFee ? `$${Number(t.devServiceFee).toLocaleString()}` : '-'}</div>
-                                            <div><span className="text-gray-400">金額:</span> {t.devAmount ? `$${Number(t.devAmount).toLocaleString()}` : '-'}</div>
-                                            <div className="col-span-2"><span className="text-gray-400">明細:</span> {t.devDetails || '-'}</div>
-                                            <div className="col-span-2"><span className="text-gray-400 font-bold">小計:</span> {t.devSubtotal ? `$${Number(t.devSubtotal).toLocaleString()}` : '-'}</div>
-                                        </div>
+                                {/* 開發發票明細列印 */}
+                                {(t.devServiceFee || (t.devInvoices && t.devInvoices.length > 0)) && (
+                                    <div className="mt-3 pt-2 border-t border-dashed border-gray-300">
+                                        <div className="text-blue-700 font-bold mb-1 text-[10px]">▼ 開發發票與請款</div>
+                                        {t.devServiceFee && <div className="text-[10px] text-gray-600 mb-1 font-bold">總服務費: ${Number(t.devServiceFee).toLocaleString()}</div>}
+                                        
+                                        {t.devInvoices && t.devInvoices.length > 0 && (
+                                            <table className="w-full text-[9px] border-collapse mt-1">
+                                                <thead>
+                                                    <tr className="bg-gray-100"><th className="border p-1 w-16">日期</th><th className="border p-1 w-20">發票號碼</th><th className="border p-1">明細</th><th className="border p-1 w-16 text-right">金額</th><th className="border p-1 w-16 text-right">小計</th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {t.devInvoices.map((inv, i) => (
+                                                        <tr key={i}>
+                                                            <td className="border p-1 text-center">{inv.date ? toROCDate(inv.date) : '-'}</td>
+                                                            <td className="border p-1 text-center">{inv.invoiceNo || '-'}</td>
+                                                            <td className="border p-1">{inv.details || '-'}</td>
+                                                            <td className="border p-1 text-right">{inv.amount ? `$${Number(inv.amount).toLocaleString()}` : '-'}</td>
+                                                            <td className="border p-1 text-right font-bold">{inv.subtotal ? `$${Number(inv.subtotal).toLocaleString()}` : '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
                                     </div>
                                 )}
                             </td>
@@ -86,18 +98,30 @@ const PrintView = ({
                                 <Label>行銷業務</Label><span className="font-bold">{t.marketer}</span>
                                 <div className="mt-0.5 ml-1 text-gray-500 text-[10px]">單據: {t.marketerNo}</div>
                                 
-                                {/* 判斷是否有填寫行銷請款資料，有填才顯示列印 */}
-                                {(t.marInvoiceNo || t.marServiceFee || t.marPaymentDate || t.marAmount || t.marSubtotal || t.marDetails) && (
-                                    <div className="mt-2 pt-2 border-t border-dashed border-gray-300 text-[10px]">
-                                        <div className="text-purple-700 font-bold mb-1">▼ 行銷發票與請款</div>
-                                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-gray-700">
-                                            <div><span className="text-gray-400">日期:</span> {t.marPaymentDate ? toROCDate(t.marPaymentDate) : '-'}</div>
-                                            <div><span className="text-gray-400">發票:</span> {t.marInvoiceNo || '-'}</div>
-                                            <div><span className="text-gray-400">服務費:</span> {t.marServiceFee ? `$${Number(t.marServiceFee).toLocaleString()}` : '-'}</div>
-                                            <div><span className="text-gray-400">金額:</span> {t.marAmount ? `$${Number(t.marAmount).toLocaleString()}` : '-'}</div>
-                                            <div className="col-span-2"><span className="text-gray-400">明細:</span> {t.marDetails || '-'}</div>
-                                            <div className="col-span-2"><span className="text-gray-400 font-bold">小計:</span> {t.marSubtotal ? `$${Number(t.marSubtotal).toLocaleString()}` : '-'}</div>
-                                        </div>
+                                {/* 行銷發票明細列印 */}
+                                {(t.marServiceFee || (t.marInvoices && t.marInvoices.length > 0)) && (
+                                    <div className="mt-3 pt-2 border-t border-dashed border-gray-300">
+                                        <div className="text-purple-700 font-bold mb-1 text-[10px]">▼ 行銷發票與請款</div>
+                                        {t.marServiceFee && <div className="text-[10px] text-gray-600 mb-1 font-bold">總服務費: ${Number(t.marServiceFee).toLocaleString()}</div>}
+                                        
+                                        {t.marInvoices && t.marInvoices.length > 0 && (
+                                            <table className="w-full text-[9px] border-collapse mt-1">
+                                                <thead>
+                                                    <tr className="bg-gray-100"><th className="border p-1 w-16">日期</th><th className="border p-1 w-20">發票號碼</th><th className="border p-1">明細</th><th className="border p-1 w-16 text-right">金額</th><th className="border p-1 w-16 text-right">小計</th></tr>
+                                                </thead>
+                                                <tbody>
+                                                    {t.marInvoices.map((inv, i) => (
+                                                        <tr key={i}>
+                                                            <td className="border p-1 text-center">{inv.date ? toROCDate(inv.date) : '-'}</td>
+                                                            <td className="border p-1 text-center">{inv.invoiceNo || '-'}</td>
+                                                            <td className="border p-1">{inv.details || '-'}</td>
+                                                            <td className="border p-1 text-right">{inv.amount ? `$${Number(inv.amount).toLocaleString()}` : '-'}</td>
+                                                            <td className="border p-1 text-right font-bold">{inv.subtotal ? `$${Number(inv.subtotal).toLocaleString()}` : '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
                                     </div>
                                 )}
                             </td>

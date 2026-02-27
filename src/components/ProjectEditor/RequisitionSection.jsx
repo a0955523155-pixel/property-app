@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Camera, Edit2, Trash2, Plus, X, Users, Save, Calendar, DollarSign, FileText } from 'lucide-react';
 import { toROCDate } from '../../utils/helpers';
 
-// ✅ 1. 將編輯表單提取到主元件外部，解決輸入跳字 (Focus Loss) 問題
+// 獨立的編輯表單元件
 const RequisitionForm = ({ 
     data, onChange, onSave, onCancel, 
     lands, buildings, shareholders, 
@@ -15,13 +15,15 @@ const RequisitionForm = ({
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                 {/* 日期 (2格) */}
                 <div className="md:col-span-2">
-                    <label className="text-xs font-bold text-purple-700 mb-1 block">日期 (民國{getROCYear(data.date)}年)</label>
+                    <label className="text-xs font-bold text-purple-700 mb-1 block">
+                        日期 {data.date ? `(民國${getROCYear(data.date)}年)` : ''}
+                    </label>
                     <div className="relative">
                         <Calendar className="w-4 h-4 text-purple-400 absolute left-2 top-2.5"/>
                         <input 
                             type="date" 
                             className="w-full pl-8 p-2 border rounded-lg bg-white text-sm font-bold" 
-                            value={data.date} 
+                            value={data.date || ''} 
                             onChange={e => onChange('date', e.target.value)}
                         />
                     </div>
@@ -86,7 +88,7 @@ const RequisitionForm = ({
                         <input 
                             type="number" 
                             className="w-full pl-8 p-2 border rounded-lg bg-white font-black text-right text-lg outline-none focus:ring-2 focus:ring-purple-400" 
-                            value={data.amount} 
+                            value={data.amount || ''} 
                             onChange={e => onChange('amount', e.target.value)}
                             placeholder="0"
                         />
@@ -100,7 +102,7 @@ const RequisitionForm = ({
                         <input 
                             className="w-full pl-8 p-2 border rounded-lg bg-gray-50 focus:bg-white transition-colors text-sm" 
                             placeholder="輸入明細說明..."
-                            value={data.details} 
+                            value={data.details || ''} 
                             onChange={e => onChange('details', e.target.value)}
                         />
                     </div>
@@ -130,15 +132,13 @@ const RequisitionSection = ({
   handleImageUploadGeneric, setPreviewImage,
   shareholders, setShareholders 
 }) => {
-  const today = new Date().toISOString().split('T')[0];
-  
   // 狀態管理
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [newShareholderName, setNewShareholderName] = useState("");
 
-  // 表單暫存 (統一管理新增與編輯的狀態)
-  const [temp, setTemp] = useState({ date: today, type: 'expense', target: "", details: "", shareholder: "", amount: "", image: null });
+  // ✅ 表單暫存：日期預設為空字串 ''，不再強制帶入今天
+  const [temp, setTemp] = useState({ date: '', type: 'expense', target: "", details: "", shareholder: "", amount: "", image: null });
 
   // 處理暫存資料變更
   const handleTempChange = (field, value) => {
@@ -149,7 +149,8 @@ const RequisitionSection = ({
   const save = () => {
     if (!temp.target || !temp.amount || !temp.shareholder) return alert("請填寫標的、股東及金額");
     
-    const dataToSave = { ...temp, date: temp.date || today };
+    // ✅ 取消強制帶入今天的邏輯
+    const dataToSave = { ...temp };
 
     if (editingId) {
         setRequisitions(requisitions.map(r => r.id === editingId ? { ...dataToSave, id: editingId } : r));
@@ -163,13 +164,13 @@ const RequisitionSection = ({
   const cancelEdit = () => {
       setIsCreating(false);
       setEditingId(null);
-      setTemp({ date: today, type: 'expense', target: "", details: "", shareholder: "", amount: "", image: null });
+      setTemp({ date: '', type: 'expense', target: "", details: "", shareholder: "", amount: "", image: null });
   };
 
   // 開始新增
   const startCreating = () => {
       setEditingId(null);
-      setTemp({ date: today, type: 'expense', target: "", details: "", shareholder: "", amount: "", image: null });
+      setTemp({ date: '', type: 'expense', target: "", details: "", shareholder: "", amount: "", image: null });
       setIsCreating(true);
   };
 
@@ -182,10 +183,14 @@ const RequisitionSection = ({
   
   const del = (id) => { if(confirm("確定刪除此請款單？")) setRequisitions(requisitions.filter(r => r.id !== id)); };
 
-  // ✅ 2. 自動排序與分組：先依日期排序，再分組
+  // 自動排序與分組：先依日期排序，再分組
   const groups = useMemo(() => {
-      // 先複製並排序 (由舊到新)
-      const sorted = [...requisitions].sort((a, b) => new Date(a.date) - new Date(b.date));
+      const sorted = [...requisitions].sort((a, b) => {
+          // ✅ 防錯處理：如果日期空白，當作時間 0 來處理，避免排序崩潰
+          const timeA = a.date ? new Date(a.date).getTime() : 0;
+          const timeB = b.date ? new Date(b.date).getTime() : 0;
+          return timeA - timeB;
+      });
       
       const g = {};
       sorted.forEach(r => { 
@@ -211,7 +216,7 @@ const RequisitionSection = ({
     <div className="bg-white rounded-2xl shadow-sm border p-8 animate-fadeIn">
        <h2 className="font-bold text-gray-700 mb-6 flex items-center gap-2 border-l-4 border-blue-500 pl-4 uppercase tracking-wider text-lg">請款單管理</h2>
        
-       {/* 股東設定 (置頂) */}
+       {/* 股東設定 */}
        <div className="mb-8 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-xl">
            <h4 className="text-xs font-bold text-gray-500 mb-3 uppercase tracking-widest flex items-center gap-1"><Users className="w-4 h-4"/> 股東名單設定</h4>
            <div className="flex flex-wrap gap-2 mb-3">
@@ -272,7 +277,6 @@ const RequisitionSection = ({
                        </thead>
                        <tbody className="divide-y">
                            {groups[sh].map(r => {
-                               // 如果正在編輯這行
                                if (editingId === r.id) {
                                    return (
                                        <tr key={r.id}>
@@ -298,7 +302,8 @@ const RequisitionSection = ({
                                
                                return (
                                    <tr key={r.id} className="hover:bg-gray-50">
-                                       <td className="p-3 font-mono text-gray-600">{toROCDate(r.date)}</td>
+                                       {/* 若沒日期就留白 */}
+                                       <td className="p-3 font-mono text-gray-600">{r.date ? toROCDate(r.date) : ''}</td>
                                        <td className="p-3">
                                            <span className={`text-xs px-2 py-1 rounded font-bold ${isIncome ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
                                                {isIncome ? '收入' : '支出'}
