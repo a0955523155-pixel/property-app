@@ -50,12 +50,16 @@ const PrintView = ({
             )}
         </div>
         
-        {/* ==================== PAGE 2: 專案團隊 ==================== */}
+        {/* ==================== PAGE 2: 專案團隊 (移除小計、加入合計) ==================== */}
         {printConfig.team && (
              <div className="print-section-page break-before-page" style={{ pageBreakBefore: 'always' }}>
                <h2 className="text-lg font-bold border-l-8 border-gray-800 pl-3 mb-4">專案團隊資訊</h2>
                <table className="w-full border-collapse border-2 border-black table-fixed text-xs">
-                 {projectTeams.map((t, tIdx) => (
+                 {projectTeams.map((t, tIdx) => {
+                    const devTotal = (t.devInvoices || []).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+                    const marTotal = (t.marInvoices || []).reduce((sum, inv) => sum + (Number(inv.amount) || 0), 0);
+
+                    return (
                     <tbody key={t.id || `team-${tIdx}`} className="break-inside-avoid border-b-2 border-black">
                         <tr className="bg-gray-50 border-b border-gray-300">
                             <td rowSpan={3} className="border-r border-black p-2 font-black text-center align-middle text-xl w-[50px] bg-gray-100">{t.unit}</td>
@@ -75,7 +79,12 @@ const PrintView = ({
                                         {t.devInvoices && t.devInvoices.length > 0 && (
                                             <table className="w-full text-[9px] border-collapse mt-1">
                                                 <thead>
-                                                    <tr className="bg-gray-100"><th className="border p-1 w-16">日期</th><th className="border p-1 w-20">發票號碼</th><th className="border p-1">明細</th><th className="border p-1 w-16 text-right">金額</th><th className="border p-1 w-16 text-right">小計</th></tr>
+                                                    <tr className="bg-gray-100">
+                                                        <th className="border p-1 w-16">日期</th>
+                                                        <th className="border p-1 w-20">發票號碼</th>
+                                                        <th className="border p-1">明細</th>
+                                                        <th className="border p-1 w-20 text-right">金額</th>
+                                                    </tr>
                                                 </thead>
                                                 <tbody>
                                                     {t.devInvoices.map((inv, i) => (
@@ -84,10 +93,15 @@ const PrintView = ({
                                                             <td className="border p-1 text-center">{inv.invoiceNo || '-'}</td>
                                                             <td className="border p-1">{inv.details || '-'}</td>
                                                             <td className="border p-1 text-right">{inv.amount ? `$${Number(inv.amount).toLocaleString()}` : '-'}</td>
-                                                            <td className="border p-1 text-right font-bold">{inv.subtotal ? `$${Number(inv.subtotal).toLocaleString()}` : '-'}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
+                                                <tfoot>
+                                                    <tr>
+                                                        <td colSpan="3" className="border p-1 text-right font-bold bg-gray-50">合計</td>
+                                                        <td className="border p-1 text-right font-black text-blue-700 bg-gray-50">${devTotal.toLocaleString()}</td>
+                                                    </tr>
+                                                </tfoot>
                                             </table>
                                         )}
                                     </div>
@@ -105,7 +119,12 @@ const PrintView = ({
                                         {t.marInvoices && t.marInvoices.length > 0 && (
                                             <table className="w-full text-[9px] border-collapse mt-1">
                                                 <thead>
-                                                    <tr className="bg-gray-100"><th className="border p-1 w-16">日期</th><th className="border p-1 w-20">發票號碼</th><th className="border p-1">明細</th><th className="border p-1 w-16 text-right">金額</th><th className="border p-1 w-16 text-right">小計</th></tr>
+                                                    <tr className="bg-gray-100">
+                                                        <th className="border p-1 w-16">日期</th>
+                                                        <th className="border p-1 w-20">發票號碼</th>
+                                                        <th className="border p-1">明細</th>
+                                                        <th className="border p-1 w-20 text-right">金額</th>
+                                                    </tr>
                                                 </thead>
                                                 <tbody>
                                                     {t.marInvoices.map((inv, i) => (
@@ -114,10 +133,15 @@ const PrintView = ({
                                                             <td className="border p-1 text-center">{inv.invoiceNo || '-'}</td>
                                                             <td className="border p-1">{inv.details || '-'}</td>
                                                             <td className="border p-1 text-right">{inv.amount ? `$${Number(inv.amount).toLocaleString()}` : '-'}</td>
-                                                            <td className="border p-1 text-right font-bold">{inv.subtotal ? `$${Number(inv.subtotal).toLocaleString()}` : '-'}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
+                                                <tfoot>
+                                                    <tr>
+                                                        <td colSpan="3" className="border p-1 text-right font-bold bg-gray-50">合計</td>
+                                                        <td className="border p-1 text-right font-black text-purple-700 bg-gray-50">${marTotal.toLocaleString()}</td>
+                                                    </tr>
+                                                </tfoot>
                                             </table>
                                         )}
                                     </div>
@@ -128,7 +152,7 @@ const PrintView = ({
                             <td colSpan={2} className="p-2"><Label>承辦代書</Label><span className="font-bold">{t.scrivener}</span></td>
                         </tr>
                     </tbody>
-                 ))}
+                 )})}
                </table>
              </div>
         )}

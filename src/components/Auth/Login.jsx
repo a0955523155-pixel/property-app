@@ -4,7 +4,8 @@ import { Lock, Mail, ShieldAlert } from 'lucide-react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../../config/firebase'; 
 
-const Login = () => {
+// ✅ 1. 這裡必須接收外部傳進來的 onLogin 函數
+const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -16,9 +17,13 @@ const Login = () => {
     setError('');
     
     try {
-      // ✅ 呼叫 Firebase 進行真實的驗證
-      await signInWithEmailAndPassword(auth, email, password);
-      // 注意：這裡不需要再呼叫 onLogin，因為 App.jsx 會自動監聽到登入成功
+      // ✅ 2. 取得 Firebase 驗證回傳的使用者資訊
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // ✅ 3. 登入成功後，立刻觸發外部的紀錄函數，並把 Email 傳過去
+      if (onLogin) {
+        onLogin(userCredential.user.email);
+      }
     } catch (err) {
       console.error('登入錯誤:', err);
       setError('帳號或密碼錯誤，或是您沒有權限進入系統。');

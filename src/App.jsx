@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   AlertCircle, LayoutGrid, FolderPlus, 
   Trash2, CheckCircle2, MessageSquarePlus, Send, ChevronDown, ChevronRight, PieChart, Building2, Folder, Tag, Users, Settings, Plus, X,
-  ArchiveRestore, Trash // ✅ 新增圖示
+  ArchiveRestore, Trash 
 } from 'lucide-react';
 
 import { db, auth } from './config/firebase';
@@ -48,11 +48,12 @@ const ADMIN_EMAILS = [
 ];
 
 const App = () => {
+  // 統一使用 currentUser 管理身分，不再使用舊的 user
   const [currentUser, setCurrentUser] = useState(null);
-  const isAdmin = currentUser && ADMIN_EMAILS.includes(currentUser.email);
+  const isAdmin = currentUser && currentUser.email && ADMIN_EMAILS.includes(currentUser.email);
 
   const [auditLogs, setAuditLogs] = useState([]);
-  const [projects, setProjects] = useState([]); // 包含所有專案 (含垃圾桶)
+  const [projects, setProjects] = useState([]); 
   const [feedbacks, setFeedbacks] = useState([]);
   const [newFeedback, setNewFeedback] = useState("");
   
@@ -68,18 +69,21 @@ const App = () => {
   const [newBrokerName, setNewBrokerName] = useState("");
 
   const [errorMsg, setErrorMsg] = useState(null);
-
-  // ✅ 新增：垃圾桶視窗狀態
   const [showTrashBin, setShowTrashBin] = useState(false);
 
-  // ✅ 資料分流：分為「正常顯示的案件」與「垃圾桶的案件」
   const activeProjects = useMemo(() => projects.filter(p => !p.isDeleted), [projects]);
   const trashedProjects = useMemo(() => projects.filter(p => p.isDeleted), [projects]);
 
+  // ✅ 1. 嚴格的身分驗證監聽 (掃除幽靈匿名帳號)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user && user.email) {
+        // 有信箱的才是合法登入
         setCurrentUser(user);
+      } else if (user && !user.email) {
+        // 如果抓到殘留的匿名無信箱帳號，強制踢出登出
+        signOut(auth);
+        setCurrentUser(null);
       } else {
         setCurrentUser(null);
       }
@@ -87,13 +91,18 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  const logAction = async (action, module, details) => {
-    if (!currentUser) return;
+  // ✅ 2. 嚴格抓取使用者信箱
+  const logAction = async (action, module, details, overrideEmail = null) => {
+    const userEmail = overrideEmail || (currentUser ? currentUser.email : null);
+    
+    // 如果真的抓不到信箱，就不記錄，避免產生空白紀錄
+    if (!userEmail) return; 
+
     try {
       await addDoc(collection(db, "audit_logs"), {
         time: new Date().toLocaleString('zh-TW', { hour12: false }),
         timestamp: Date.now(),
-        user: currentUser.email,
+        user: userEmail,
         action, 
         module, 
         details,
@@ -107,10 +116,7 @@ const App = () => {
   const handleAcknowledgeLog = async (logId) => {
     if (!logId) return;
     try {
-      const logRef = doc(db, "audit_logs", String(logId));
-      await updateDoc(logRef, {
-        acknowledged: true
-      });
+      await updateDoc(doc(db, "audit_logs", String(logId)), { acknowledged: true });
     } catch (error) {
       console.error("確認失敗:", error);
       alert("確認失敗，請檢查網路連線。");
@@ -119,9 +125,7 @@ const App = () => {
 
   useEffect(() => {
     if (!currentUser) return; 
-
     const handlePrint = () => { logAction('列印', '系統操作', '執行了列印報表/匯出PDF'); };
-
     const handleKeyDown = (e) => {
       if (e.key === 'PrintScreen') { logAction('截圖', '系統操作', '按下了 PrintScreen 截圖鍵'); }
       if (e.metaKey && e.shiftKey && (e.key === '3' || e.key === '4')) { logAction('截圖', '系統操作', '使用了 Mac 快捷鍵截圖'); }
@@ -152,12 +156,12 @@ const App = () => {
     return () => { if(document.head.contains(styleTag)){ document.head.removeChild(styleTag); } }
   }, []);
 
+  // ✅ 3. 資料庫連線全部改為依賴 currentUser
   useEffect(() => {
     if (!currentUser) return; 
     const q = query(collection(db, "projects"), orderBy("name", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const projectsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setProjects(projectsData);
+      setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     }, (error) => { console.error("Firestore Error:", error); setErrorMsg("連線錯誤"); });
     
     const qFeed = query(collection(db, "feedbacks"), orderBy("createdAt", "desc"));
@@ -172,7 +176,7 @@ const App = () => {
     });
 
     return () => { unsubscribe(); unsubFeed(); unsubAgency(); };
-  }, [currentUser]);
+  }, [currentUser]); // <-- 這裡改成 currentUser
 
   const saveAgencyDB = async (newDB) => {
     try { await setDoc(doc(db, "settings", "agency_list"), newDB); } 
@@ -211,7 +215,6 @@ const App = () => {
     saveAgencyDB(newDB); 
   };
 
-  // ✅ 改用 activeProjects 來產生下拉選單與列表
   const uniqueSites = useMemo(() => {
     const sites = activeProjects.map(p => p.site || "大成工業城");
     const unique = [...new Set(sites)].sort();
@@ -265,7 +268,7 @@ const App = () => {
         name: newProjectName,
         site: targetSite, zone: "未分類", updatedAt: new Date().toISOString(),
         transactions: [], buyers: [], lands: [], buildings: [],
-        isDeleted: false // 預設不是刪除狀態
+        isDeleted: false 
       });
       setActiveSite(targetSite);
       setActiveProjectId(docRef.id);
@@ -273,7 +276,6 @@ const App = () => {
     } catch (error) { console.error(error); alert("建立失敗: " + error.message); }
   };
 
-  // ✅ 改寫：軟刪除 (移至垃圾桶)
   const moveToTrash = async (e, projectId) => {
     e.stopPropagation();
     if (!confirm('確定要把此案件移至「資源回收桶」嗎？\n(管理員後續可以還原此案件)')) return;
@@ -289,7 +291,6 @@ const App = () => {
     } catch (error) { console.error(error); alert("刪除失敗"); }
   };
 
-  // ✅ 新增：還原案件
   const restoreProject = async (projectId) => {
     try {
       const projectToRestore = projects.find(p => p.id === projectId);
@@ -304,7 +305,6 @@ const App = () => {
     }
   };
 
-  // ✅ 新增：永久刪除 (Hard Delete)
   const hardDeleteProject = async (projectId) => {
     if (!confirm('⚠️ 警告：您即將「永久刪除」此案件！\n此動作絕對無法復原，請確認是否繼續？')) return;
     try {
@@ -329,10 +329,13 @@ const App = () => {
   // ==========================================
 
   if (!currentUser) {
-    return <Login />;
+    return (
+      <Login onLogin={(email) => {
+        logAction('登入', '系統存取', '成功登入系統', email);
+      }} />
+    );
   }
 
-  // SummaryReport 改傳 activeProjects (不要印出垃圾桶的)
   if (showSummaryReport) return <div className="max-w-7xl mx-auto p-6 md:p-12 bg-gray-50 min-h-screen font-sans"><ProjectSummaryReport projects={activeProjects} onBack={() => setShowSummaryReport(false)} /></div>;
   
   if (activeProjectId) return (
@@ -373,7 +376,6 @@ const App = () => {
       <div className="max-w-6xl mx-auto p-6 md:p-12 flex-1 w-full relative">
         {errorMsg && <div className="mb-8 bg-red-50 border-l-4 border-red-500 p-6 rounded shadow-sm"><div className="flex items-center gap-2 mb-2 font-bold text-red-700 text-lg"><AlertCircle className="w-6 h-6"/> 無法存取資料庫</div><p className="text-sm text-red-600 mb-4 font-bold">{errorMsg}</p></div>}
 
-        {/* 垃圾桶 Modal (管理員專屬) */}
         {isAdmin && showTrashBin && (
            <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 animate-fadeIn" onClick={() => setShowTrashBin(false)}>
              <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl p-6 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -410,7 +412,6 @@ const App = () => {
            </div>
         )}
 
-        {/* 仲介管理 Modal */}
         {showAgencyManager && (
            <div className="fixed inset-0 bg-black/50 z-[9999] flex items-center justify-center p-4" onClick={() => setShowAgencyManager(false)}>
              <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -460,7 +461,6 @@ const App = () => {
         )}
 
         <div className="animate-fadeIn flex flex-col items-center justify-center min-h-[60vh]">
-            {/* 管理員專屬右上角按鈕區 */}
             {isAdmin && (
                 <div className="absolute top-0 right-0 flex gap-2">
                     <button onClick={() => setShowTrashBin(true)} className="flex items-center gap-2 bg-red-50 text-red-600 border border-red-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-100 transition shadow-sm">
@@ -517,7 +517,6 @@ const App = () => {
                                  {filteredGroupedProjects[zone].map(p => (
                                    <div key={p.id} className="flex items-center justify-between p-3 pl-10 hover:bg-white border-t border-blue-50 group cursor-pointer" onClick={() => setActiveProjectId(p.id)}>
                                       <div className="flex items-center gap-2 text-sm font-medium text-gray-600 group-hover:text-blue-600"><Folder className="w-4 h-4 text-blue-300 group-hover:text-blue-500" />{p.name}</div>
-                                      {/* ✅ 改呼叫 moveToTrash 進行軟刪除 */}
                                       <button onClick={(e) => moveToTrash(e, p.id)} className="text-gray-300 hover:text-red-500 hover:bg-red-50 p-1.5 rounded-full transition opacity-0 group-hover:opacity-100" title="移至垃圾桶"><Trash2 className="w-4 h-4" /></button>
                                    </div>
                                  ))}

@@ -1,13 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { DollarSign, Edit2, Trash2, Camera, X, ImageIcon, Save, Plus } from 'lucide-react';
 import { CATEGORIES, toROCDate } from '../../utils/helpers';
 
-// 獨立的編輯表單元件
 const TransactionEditForm = ({ 
   data, onChange, onSave, onCancel, 
   lands, buildings, buyers, 
-  handleImageUploadGeneric 
+  handleImageUploadGeneric,
+  transactions // ✅ 傳入所有歷史交易，用來抓取自訂科目
 }) => {
+    // 控制是否正在手動輸入新科目
+    const [isAddingCat, setIsAddingCat] = useState(false);
+
+    // ✅ 自動混合預設科目與您曾經手動打過的新科目
+    const currentCategories = useMemo(() => {
+        const existing = transactions.filter(t => t.type === data.type).map(t => t.category);
+        const base = CATEGORIES[data.type] || [];
+        const combined = [...new Set([...base, ...existing])];
+        if (data.category && !combined.includes(data.category) && data.category !== '__ADD__') {
+            combined.push(data.category);
+        }
+        return combined;
+    }, [transactions, data.type, data.category]);
+
     return (
         <div className="bg-white p-6 rounded-xl border-2 border-blue-100 shadow-md animate-fadeIn">
             <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
@@ -17,7 +31,7 @@ const TransactionEditForm = ({
                 </div>
                 <div>
                     <label className="text-xs font-black block mb-2 text-gray-600">類型</label>
-                    <select className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.type} onChange={e => { onChange('type', e.target.value); onChange('category', CATEGORIES[e.target.value][0]); }}>
+                    <select className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.type} onChange={e => { onChange('type', e.target.value); onChange('category', CATEGORIES[e.target.value][0]); setIsAddingCat(false); }}>
                         <option value="expense">支出</option>
                         <option value="income">收入</option>
                     </select>
@@ -46,9 +60,26 @@ const TransactionEditForm = ({
                 
                 <div>
                     <label className="text-xs font-black block mb-2 text-gray-600">科目</label>
-                    <select className="w-full p-2 border rounded-lg outline-none focus:border-blue-400" value={data.category} onChange={e => onChange('category', e.target.value)}>
-                        {CATEGORIES[data.type].map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    {/* ✅ 支援新增科目的下拉選單 */}
+                    {!isAddingCat ? (
+                        <select 
+                            className="w-full p-2 border rounded-lg outline-none focus:border-blue-400 font-bold" 
+                            value={data.category} 
+                            onChange={e => {
+                                if(e.target.value === '__ADD__') { setIsAddingCat(true); onChange('category', ''); }
+                                else { onChange('category', e.target.value); }
+                            }}
+                        >
+                            {currentCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                            <option disabled>──────────</option>
+                            <option value="__ADD__" className="text-blue-600 font-bold">+ 新增自訂科目...</option>
+                        </select>
+                    ) : (
+                        <div className="flex gap-1 animate-fadeIn">
+                            <input autoFocus className="w-full p-2 border rounded-lg outline-none border-blue-400 bg-blue-50 font-bold text-blue-700" placeholder="輸入科目" value={data.category === '__ADD__' ? '' : data.category} onChange={e => onChange('category', e.target.value)} />
+                            <button onClick={() => { setIsAddingCat(false); if(!data.category) onChange('category', currentCategories[0]); }} className="text-gray-400 hover:text-red-500"><X className="w-5 h-5"/></button>
+                        </div>
+                    )}
                 </div>
                 <div>
                     <label className="text-xs font-black block mb-2 text-gray-600">金額</label>
@@ -79,7 +110,6 @@ const TransactionEditForm = ({
     );
 };
 
-// 財務表格元件
 const TransactionTable = ({ 
   data, typeLabel, colorTheme, subStats, 
   editingTxId, startEditing, 
@@ -107,6 +137,7 @@ const TransactionTable = ({
                                             onCancel={cancelEdit}
                                             lands={lands} buildings={buildings} buyers={buyers}
                                             handleImageUploadGeneric={handleImageUploadGeneric}
+                                            transactions={transactions}
                                         />
                                     </td>
                                 </tr>
@@ -115,7 +146,6 @@ const TransactionTable = ({
 
                         return (
                             <tr key={t.id} className="hover:bg-gray-50 group transition-colors">
-                                {/* 若沒日期就留白 */}
                                 <td className="p-4 text-gray-500 font-mono text-sm whitespace-nowrap">{t.date ? toROCDate(t.date) : ''}</td>
                                 <td className="p-4 whitespace-nowrap"><span className={`px-3 py-1.5 rounded-full text-xs font-bold ${t.type==='income'?'bg-red-100 text-red-600':'bg-blue-100 text-blue-600'}`}>{t.category}</span></td>
                                 <td className="p-4"><span className="text-gray-700 font-medium">{t.note || "-"}</span>{t.image && <button onClick={() => setPreviewImage(t.image)} className="text-xs text-blue-500 hover:text-blue-700 font-bold flex items-center gap-1 mt-1 whitespace-nowrap"><ImageIcon className="w-3 h-3"/> 憑證</button>}</td>
@@ -137,12 +167,10 @@ const TransactionTable = ({
     );
 };
 
-// 主元件
 const FinanceSection = ({ transactions, setTransactions, stats, groupedTransactions, lands, buildings, buyers, visibleLedgers, setVisibleLedgers, handleImageUploadGeneric, setPreviewImage }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [editingTxId, setEditingTxId] = useState(null);
   
-  // ✅ 預設 date: '' 不再帶入 today
   const [newTx, setNewTx] = useState({ date: '', type: 'expense', category: CATEGORIES.expense[0], amount: '', note: '', image: null, linkedId: null, linkedType: 'general' });
 
   const handleEditChange = (field, value) => {
@@ -169,11 +197,11 @@ const FinanceSection = ({ transactions, setTransactions, stats, groupedTransacti
   const saveTransaction = (e) => {
       if(e) e.preventDefault();
       if (!newTx.amount) return alert("請輸入金額");
+      if (!newTx.category) return alert("請輸入或選擇科目"); // 防止自訂科目留白
       
       const parsedAmount = Number(newTx.amount);
       if (isNaN(parsedAmount)) return alert("金額必須為數字");
       
-      // ✅ 儲存時直接寫入，如果沒有日期就是空白字串
       if (editingTxId) {
           setTransactions(transactions.map(t => t.id === editingTxId ? { ...newTx, id: t.id, amount: parsedAmount } : t));
       } else {
@@ -215,6 +243,7 @@ const FinanceSection = ({ transactions, setTransactions, stats, groupedTransacti
                     onCancel={cancelEdit}
                     lands={lands} buildings={buildings} buyers={buyers}
                     handleImageUploadGeneric={handleImageUploadGeneric}
+                    transactions={transactions}
                 />
             </div>
         )}
