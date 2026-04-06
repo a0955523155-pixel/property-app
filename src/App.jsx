@@ -48,7 +48,6 @@ const ADMIN_EMAILS = [
 ];
 
 const App = () => {
-  // 統一使用 currentUser 管理身分，不再使用舊的 user
   const [currentUser, setCurrentUser] = useState(null);
   const isAdmin = currentUser && currentUser.email && ADMIN_EMAILS.includes(currentUser.email);
 
@@ -74,14 +73,12 @@ const App = () => {
   const activeProjects = useMemo(() => projects.filter(p => !p.isDeleted), [projects]);
   const trashedProjects = useMemo(() => projects.filter(p => p.isDeleted), [projects]);
 
-  // ✅ 1. 嚴格的身分驗證監聽 (掃除幽靈匿名帳號)
+  // ✅ 1. 嚴格身分驗證，自動驅逐沒有 Email 的殘留匿名帳號
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user && user.email) {
-        // 有信箱的才是合法登入
         setCurrentUser(user);
       } else if (user && !user.email) {
-        // 如果抓到殘留的匿名無信箱帳號，強制踢出登出
         signOut(auth);
         setCurrentUser(null);
       } else {
@@ -91,12 +88,11 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  // ✅ 2. 嚴格抓取使用者信箱
+  // ✅ 2. 嚴格寫入使用紀錄，抓不到信箱絕對不寫入
   const logAction = async (action, module, details, overrideEmail = null) => {
     const userEmail = overrideEmail || (currentUser ? currentUser.email : null);
     
-    // 如果真的抓不到信箱，就不記錄，避免產生空白紀錄
-    if (!userEmail) return; 
+    if (!userEmail) return; // 阻擋空白紀錄
 
     try {
       await addDoc(collection(db, "audit_logs"), {
@@ -125,6 +121,7 @@ const App = () => {
 
   useEffect(() => {
     if (!currentUser) return; 
+
     const handlePrint = () => { logAction('列印', '系統操作', '執行了列印報表/匯出PDF'); };
     const handleKeyDown = (e) => {
       if (e.key === 'PrintScreen') { logAction('截圖', '系統操作', '按下了 PrintScreen 截圖鍵'); }
@@ -156,7 +153,6 @@ const App = () => {
     return () => { if(document.head.contains(styleTag)){ document.head.removeChild(styleTag); } }
   }, []);
 
-  // ✅ 3. 資料庫連線全部改為依賴 currentUser
   useEffect(() => {
     if (!currentUser) return; 
     const q = query(collection(db, "projects"), orderBy("name", "asc"));
@@ -176,7 +172,7 @@ const App = () => {
     });
 
     return () => { unsubscribe(); unsubFeed(); unsubAgency(); };
-  }, [currentUser]); // <-- 這裡改成 currentUser
+  }, [currentUser]);
 
   const saveAgencyDB = async (newDB) => {
     try { await setDoc(doc(db, "settings", "agency_list"), newDB); } 
@@ -331,6 +327,7 @@ const App = () => {
   if (!currentUser) {
     return (
       <Login onLogin={(email) => {
+        // ✅ 3. 登入當下，強制使用回傳的 email 寫入紀錄
         logAction('登入', '系統存取', '成功登入系統', email);
       }} />
     );

@@ -3,12 +3,38 @@ import { Plus, Trash2, Home, Camera, Edit2, X, ImageIcon, Save } from 'lucide-re
 import { toROCDate } from '../../utils/helpers';
 import LinkedLedger from '../LinkedLedger';
 
+// ✅ 升級：加入「前端自動壓縮黑科技」！徹底解決 1MB 爆檔問題
 const handleImageUploadGeneric = (file, callback) => { 
-  if (file) { 
-    const reader = new FileReader(); 
-    reader.onloadend = () => callback(reader.result); 
-    reader.readAsDataURL(file); 
-  } 
+  if (!file) return; 
+  const reader = new FileReader(); 
+  reader.readAsDataURL(file);
+  reader.onload = (event) => {
+    const img = new Image();
+    img.src = event.target.result;
+    img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1000; // 最大寬度限制
+        const MAX_HEIGHT = 1000; // 最大高度限制
+        let width = img.width;
+        let height = img.height;
+
+        // 依比例縮放
+        if (width > height) {
+            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+        } else {
+            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 壓縮成 JPEG，品質 0.6，大幅降低容量 (完美解決 Firebase 1MB 限制)
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        callback(compressedDataUrl);
+    };
+  };
 };
 
 const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewImage, transactions, setTransactions, buildingGrandTotal }) => {
@@ -19,10 +45,11 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
   // 保留 today 變數，但不再強制作為預設值
   const today = new Date().toISOString().split('T')[0];
 
-  // ✅ 表單暫存資料：saleDate 預設改為空字串
+  // ✅ 表單暫存資料：saleDate 預設改為空字串，新增 buildingImages 陣列支援多圖
   const [temp, setTemp] = useState({ 
     saleDate: "", 
-    unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null 
+    unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], 
+    permitImage: null, licenseImage: null, buildNoImage: null, buildingImages: [] 
   });
   const [seller, setSeller] = useState({ name: "", phone: "", address: "" });
 
@@ -32,7 +59,7 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
   // 儲存 (新增 或 更新)
   const save = () => { 
       if(!temp.address) return alert("請輸入地址"); 
-      // ✅ 取消強制帶入 today，完全依照使用者輸入(包含留白)
+      // 取消強制帶入 today，完全依照使用者輸入(包含留白)
       const dataToSave = { ...temp };
 
       if(editingId) {
@@ -50,15 +77,15 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
   const cancelEdit = () => {
       setIsCreating(false);
       setEditingId(null);
-      // ✅ 重置時 saleDate 設為空字串
-      setTemp({ saleDate: "", unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null });
+      // 重置時清空所有資料
+      setTemp({ saleDate: "", unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null, buildingImages: [] });
   };
 
   // 開啟「新增」表單 (在最上方)
   const startCreating = () => {
       setEditingId(null); // 關閉其他編輯
-      // ✅ 新增時 saleDate 設為空字串
-      setTemp({ saleDate: "", unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null });
+      // 新增時清空資料
+      setTemp({ saleDate: "", unit: "", permitNumber: "", address: "", license: "", buildNumber: "", areaM2: "", pricePerUnit: "", totalPrice: "", sellers: [], permitImage: null, licenseImage: null, buildNoImage: null, buildingImages: [] });
       setIsCreating(true);
   };
   
@@ -66,8 +93,8 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
   const startEditing = (b) => { 
       setIsCreating(false); // 關閉新增
       setEditingId(b.id);   // 設定當前編輯 ID
-      // ✅ 編輯舊資料時，沒日期就帶空字串
-      setTemp({ ...b, saleDate: b.saleDate || "" }); 
+      // 編輯舊資料時，帶入舊資料與陣列防呆
+      setTemp({ ...b, saleDate: b.saleDate || "", buildingImages: b.buildingImages || [] }); 
   };
   
   const del = (id) => { if(confirm("確定刪除此建物標的？")) setBuildings(buildings.filter(b=>b.id!==id)); };
@@ -87,10 +114,28 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="md:col-span-2">
                     <label className="text-sm text-gray-500 block mb-2 font-bold">成交日期 {temp.saleDate ? `(民國 ${getROCYear(temp.saleDate)} 年)` : ''}</label>
-                    {/* ✅ 綁定 value 保證清除時會空白 */}
+                    {/* 綁定 value 保證清除時會空白 */}
                     <input type="date" className="w-full p-3 border rounded-lg bg-white" value={temp.saleDate || ''} onChange={e=>setTemp({...temp, saleDate: e.target.value})}/>
                 </div>
                 <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">戶號</label><input placeholder="例如：A1" className="w-full p-3 border rounded-lg font-bold text-blue-600" value={temp.unit} onChange={e=>setTemp({...temp, unit: e.target.value})}/></div>
+                
+                {/* ✅ 新增：多張建物照片上傳區塊 */}
+                <div className="md:col-span-2">
+                    <label className="text-sm text-gray-500 block mb-2 font-bold">建物現場照片 (支援多張上傳)</label>
+                    <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded border border-orange-200">
+                        <label className="cursor-pointer bg-orange-100 text-orange-700 hover:bg-orange-200 px-3 py-1.5 rounded text-xs font-bold transition flex items-center gap-1 shadow-sm">
+                            <Camera className="w-4 h-4"/> 上傳照片
+                            <input type="file" className="hidden" accept="image/*" onChange={(e)=>handleImageUploadGeneric(e.target.files[0], (res)=>setTemp({...temp, buildingImages: [...(temp.buildingImages || []), res]}))} />
+                        </label>
+                        {(temp.buildingImages || []).map((img, i) => (
+                            <div key={i} className="flex items-center gap-1 bg-gray-100 border border-gray-200 px-2 py-1 rounded shadow-sm">
+                                <button onClick={()=>setPreviewImage(img)} className="text-xs font-bold text-gray-700 hover:text-orange-600 hover:underline">照片 {i+1}</button>
+                                <button onClick={()=>setTemp({...temp, buildingImages: temp.buildingImages.filter((_, idx)=>idx!==i)})} className="text-red-400 hover:text-red-600"><X className="w-3 h-3"/></button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
                 <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">建照號碼</label><div className="flex gap-2"><input className="flex-1 w-full p-3 border rounded-lg" value={temp.permitNumber} onChange={e=>setTemp({...temp, permitNumber: e.target.value})}/><label className="cursor-pointer bg-gray-100 p-3 rounded-lg"><Camera className="w-4 h-4"/><input type="file" className="hidden" accept="image/*" onChange={(e)=>handleImageUploadGeneric(e.target.files[0], (res)=>setTemp({...temp, permitImage: res}))}/></label>{temp.permitImage && <button onClick={()=>setTemp({...temp, permitImage: null})} className="bg-red-50 text-red-500 p-3 rounded-lg"><X className="w-4 h-4"/></button>}</div></div>
                 <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">門牌地址</label><input className="w-full p-3 border rounded-lg" value={temp.address} onChange={e=>setTemp({...temp, address: e.target.value})}/></div>
                 <div className="md:col-span-2"><label className="text-sm text-gray-500 block mb-2 font-bold">使用執照</label><div className="flex gap-2"><input className="flex-1 w-full p-3 border rounded-lg" value={temp.license} onChange={e=>setTemp({...temp, license: e.target.value})}/><label className="cursor-pointer bg-gray-100 p-3 rounded-lg"><Camera className="w-4 h-4"/><input type="file" className="hidden" accept="image/*" onChange={(e)=>handleImageUploadGeneric(e.target.files[0], (res)=>setTemp({...temp, licenseImage: res}))}/></label>{temp.licenseImage && <button onClick={()=>setTemp({...temp, licenseImage: null})} className="bg-red-50 text-red-500 p-3 rounded-lg"><X className="w-4 h-4"/></button>}</div></div>
@@ -150,10 +195,19 @@ const BuildingSection = ({ buildings, setBuildings, sortedBuildings, setPreviewI
                              <span className="text-gray-800 font-bold text-lg">{b.address}</span>
                           </div>
                           
-                          {/* ✅ 若無日期顯示 '-' */}
                           <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">成交日期</span>{b.saleDate ? toROCDate(b.saleDate) : '-'}</div>
                           <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">建號</span><div className="flex items-center gap-2">{b.buildNumber}{b.buildNoImage && <ImageIcon className="w-4 h-4 text-blue-500 cursor-pointer" onClick={()=>setPreviewImage(b.buildNoImage)}/>}</div></div>
                           <div><span className="text-xs text-gray-400 block font-black uppercase mb-1">總額</span><span className="text-orange-600 font-bold text-xl">${Number(b.totalPrice).toLocaleString()}</span></div>
+
+                          {/* ✅ 顯示多張建物照片的預覽按鈕 */}
+                          {b.buildingImages && b.buildingImages.length > 0 && (
+                            <div className="md:col-span-3 border-t border-gray-200 pt-3 mt-1 flex flex-wrap gap-2">
+                               <span className="text-xs text-gray-400 font-black uppercase flex items-center w-full mb-1">建物照片</span>
+                               {b.buildingImages.map((img, i) => (
+                                 <button key={i} onClick={()=>setPreviewImage(img)} className="bg-white border border-gray-200 shadow-sm px-3 py-1 rounded text-xs font-bold hover:text-orange-600 transition flex items-center gap-1"><Camera className="w-3 h-3"/> 照片 {i+1}</button>
+                               ))}
+                            </div>
+                          )}
                        </div>
                      </div>
                      
